@@ -3,7 +3,7 @@
     "admin": {
       "accordion": { "label": "SF Connector" },
       "panel": {
-        "label": "Salesforce Sync",
+        "label": "Salesforce → jCustomer Sync",
         "title": "Salesforce - jCustomer Connector",
         "subtitle": "Sync Contact and Account data from Salesforce into jCustomer profile properties."
       },

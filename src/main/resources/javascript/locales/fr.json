@@ -3,7 +3,7 @@
     "admin": {
       "accordion": { "label": "Connecteur SF" },
       "panel": {
-        "label": "Sync Salesforce",
+        "label": "Sync Salesforce → jCustomer",
         "title": "Connecteur Salesforce → jCustomer",
         "subtitle": "Synchronise les données Contact et Account de Salesforce vers les propriétés de profil jCustomer."
       },
