@@ -1,0 +1,34 @@
+.builder {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Sentence-style row: "Every [Daily] on [Monday] at [05] : [00] UTC" */
+.row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.word {
+    font-size: 13px;
+    color: var(--color-gray-700, #374151);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.preview {
+    color: var(--color-gray-400, #9ca3af);
+    font-size: 11px;
+}
+
+.preview code {
+    font-family: monospace;
+    background: var(--color-gray-100, #f3f4f6);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--color-gray-600, #4b5563);
+}

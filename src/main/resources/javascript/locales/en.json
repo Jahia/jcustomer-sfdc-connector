@@ -1,0 +1,101 @@
+{
+  "jcustomer-sfdc-connector": {
+    "admin": {
+      "accordion": { "label": "SF Connector" },
+      "panel": {
+        "label": "Salesforce Sync",
+        "title": "Salesforce - jCustomer Connector",
+        "subtitle": "Sync Contact and Account data from Salesforce into jCustomer profile properties."
+      },
+      "tab": {
+        "connection": "Connection",
+        "mapping":    "Field Mapping",
+        "sync":       "Synchronisation"
+      }
+    },
+    "connection": {
+      "title":    "Salesforce Connection",
+      "subtitle": "Enter your Salesforce Connected App credentials. The private key must be in PEM format (PKCS#8 or PKCS#1). The public certificate must be uploaded to the Connected App.",
+      "enabled":  "Connector enabled",
+      "test":     "Test connection",
+      "testing":  "Testing...",
+      "testOk":   "Connection successful",
+      "testFail": "Connection failed",
+      "saved":    "Connection settings saved"
+    },
+    "mapping": {
+      "title":          "Field Mapping",
+      "subtitle":       "Map Salesforce Contact and Account fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
+      "col": {
+        "sfField":    "Salesforce Field",
+        "jcProperty": "jCustomer Property"
+      },
+      "selectField":    "— Select SF field —",
+      "selectProperty": "— Select jC property —",
+      "addRow":         "Add mapping",
+      "empty":          "No mappings configured. Click \"Add mapping\" to start.",
+      "saved":          "Mapping saved for {{obj}}"
+    },
+    "sync": {
+      "title":   "Last synchronisation",
+      "subtitle": "Monitor the last sync status.",
+      "triggers": {
+        "title":   "Sync triggers",
+        "subtitle": "Choose which events trigger a Salesforce data sync into jCustomer.",
+        "save":    "Save trigger config",
+        "login": {
+          "label": "Login trigger",
+          "desc":  "Sync this user's SF data immediately on every Jahia login (OIDC, local). Runs asynchronously — login is not delayed."
+        },
+        "scheduler": {
+          "label":    "Scheduled batch",
+          "desc":     "Sync all subscribed users on a cron schedule. Uses delta sync (LastModifiedDate filter).",
+          "cron":     "Cron expression",
+          "cronHint": "Format: second minute hour day month weekday — e.g. 0 0 5 * * ? = daily at 05:00 UTC"
+        },
+        "manual": {
+          "label": "Manual sync",
+          "desc":  "Full sync of all mapped contacts immediately (ignores lastSyncAt delta)."
+        }
+      },
+      "triggersSaved": "Trigger configuration saved",
+      "lastRun": "Last run",
+      "status":  "Status",
+      "updated": "Records updated",
+      "errors":  "Errors",
+      "noState": "No sync has run yet.",
+      "trigger": "Sync now",
+      "running": "Running...",
+      "started": "Sync started in background. Refresh in a few seconds to see the result.",
+      "info":    "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file."
+    },
+    "cron": {
+      "every": "Every",
+      "on":    "on",
+      "onDay": "on day",
+      "at":    "at",
+      "freq": {
+        "hourly":  "Hour",
+        "daily":   "Day",
+        "weekly":  "Week",
+        "monthly": "Month"
+      },
+      "day": {
+        "monday":    "Monday",
+        "tuesday":   "Tuesday",
+        "wednesday": "Wednesday",
+        "thursday":  "Thursday",
+        "friday":    "Friday",
+        "saturday":  "Saturday",
+        "sunday":    "Sunday"
+      }
+    },
+    "action": {
+      "save":    "Save",
+      "saving":  "Saving...",
+      "reload":  "Reload",
+      "remove":  "Remove row",
+      "refresh": "Refresh"
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "jcustomer-sfdc-connector": {
+    "admin": {
+      "accordion": { "label": "Connecteur SF" },
+      "panel": {
+        "label": "Sync Salesforce",
+        "title": "Connecteur Salesforce → jCustomer",
+        "subtitle": "Synchronise les données Contact et Account de Salesforce vers les propriétés de profil jCustomer."
+      },
+      "tab": {
+        "connection": "Connexion",
+        "mapping":    "Mapping des champs",
+        "sync":       "Synchronisation"
+      }
+    },
+    "connection": {
+      "title":    "Connexion Salesforce",
+      "subtitle": "Renseignez les credentials de votre Connected App Salesforce. La clé privée doit être au format PEM (PKCS#8 ou PKCS#1). Le certificat public doit être uploadé dans la Connected App.",
+      "enabled":  "Connecteur activé",
+      "test":     "Tester la connexion",
+      "testing":  "Test en cours...",
+      "testOk":   "Connexion réussie",
+      "testFail": "Échec de connexion",
+      "saved":    "Paramètres de connexion sauvegardés"
+    },
+    "mapping": {
+      "title":          "Mapping des champs",
+      "subtitle":       "Mappez les champs Contact et Account Salesforce vers les propriétés de profil jCustomer. L'email (→ email) est requis pour la correspondance des profils.",
+      "col": {
+        "sfField":    "Champ Salesforce",
+        "jcProperty": "Propriété jCustomer"
+      },
+      "selectField":    "— Sélectionner un champ SF —",
+      "selectProperty": "— Sélectionner une propriété jC —",
+      "addRow":         "Ajouter un mapping",
+      "empty":          "Aucun mapping configuré. Cliquez sur \"Ajouter un mapping\" pour commencer.",
+      "saved":          "Mapping sauvegardé pour {{obj}}"
+    },
+    "sync": {
+      "title":   "Dernière synchronisation",
+      "subtitle": "État de la dernière synchronisation.",
+      "triggers": {
+        "title":   "Déclencheurs de synchronisation",
+        "subtitle": "Choisissez quels événements déclenchent une synchronisation Salesforce → jCustomer.",
+        "save":    "Sauvegarder la configuration",
+        "login": {
+          "label": "Déclencheur à la connexion",
+          "desc":  "Synchronise les données SF de l'utilisateur immédiatement à chaque connexion Jahia (OIDC, local). S'exécute en arrière-plan sans bloquer la connexion."
+        },
+        "scheduler": {
+          "label":    "Batch planifié",
+          "desc":     "Synchronise tous les contacts sur un planning cron. Utilise le delta sync (filtre LastModifiedDate).",
+          "cron":     "Expression cron",
+          "cronHint": "Format : seconde minute heure jour mois semaine — ex. 0 0 5 * * ? = quotidien à 05h00 UTC"
+        },
+        "manual": {
+          "label": "Synchronisation manuelle",
+          "desc":  "Synchronisation complète immédiate de tous les contacts (ignore le delta lastSyncAt)."
+        }
+      },
+      "triggersSaved": "Configuration des déclencheurs sauvegardée",
+      "lastRun": "Dernière exécution",
+      "status":  "Statut",
+      "updated": "Enregistrements mis à jour",
+      "errors":  "Erreurs",
+      "noState": "Aucune synchronisation n'a encore été exécutée.",
+      "trigger": "Synchroniser maintenant",
+      "running": "En cours...",
+      "started": "Synchronisation lancée en arrière-plan. Actualisez dans quelques secondes pour voir le résultat.",
+      "info":    "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi."
+    },
+    "cron": {
+      "every": "Chaque",
+      "on":    "le",
+      "onDay": "le jour",
+      "at":    "à",
+      "freq": {
+        "hourly":  "Heure",
+        "daily":   "Jour",
+        "weekly":  "Semaine",
+        "monthly": "Mois"
+      },
+      "day": {
+        "monday":    "Lundi",
+        "tuesday":   "Mardi",
+        "wednesday": "Mercredi",
+        "thursday":  "Jeudi",
+        "friday":    "Vendredi",
+        "saturday":  "Samedi",
+        "sunday":    "Dimanche"
+      }
+    },
+    "action": {
+      "save":    "Sauvegarder",
+      "saving":  "Sauvegarde...",
+      "reload":  "Recharger",
+      "remove":  "Supprimer",
+      "refresh": "Actualiser"
+    }
+  }
+}

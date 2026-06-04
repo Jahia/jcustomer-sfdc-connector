@@ -1,0 +1,28 @@
+# IntelliJ / IDE
+.idea
+*.iml
+*.ipr
+.settings/
+.project
+.classpath
+
+# Node
+node_modules/
+node/
+
+# Yarn
+yarn-error.log
+.pnp.*
+
+# Maven build output
+target/
+
+# Webpack output (rebuilt by mvn package)
+src/main/resources/javascript/apps/
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+.env.local
