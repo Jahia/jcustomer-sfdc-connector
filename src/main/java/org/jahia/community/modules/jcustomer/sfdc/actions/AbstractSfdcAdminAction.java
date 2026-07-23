@@ -3,6 +3,7 @@ package org.jahia.community.modules.jcustomer.sfdc.actions;
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
 import org.jahia.exceptions.JahiaForbiddenAccessException;
+import org.jahia.osgi.BundleUtils;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.render.RenderContext;
 import org.jahia.services.render.Resource;
@@ -10,6 +11,8 @@ import org.jahia.services.render.URLResolver;
 import org.jahia.services.usermanager.JahiaGroupManagerService;
 import org.jahia.services.usermanager.JahiaUser;
 import org.jahia.services.usermanager.JahiaUserManagerService;
+import org.osgi.service.cm.Configuration;
+import org.osgi.service.cm.ConfigurationAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,9 +30,10 @@ import java.util.Map;
  * cannot be forgotten on an individual action:
  *
  * <ol>
- *   <li><b>Authorization</b> — the caller must be a <em>server administrator</em> (the {@code root}
- *       user or a member of the global {@code /groups/administrators} group). The stock
- *       {@link Action} contract only guarantees an <em>authenticated</em> user
+ *   <li><b>Authorization</b> — the caller must be an administrator: either a <em>server
+ *       administrator</em> ({@code root} / the global {@code /groups/administrators} group) or a
+ *       <em>site administrator</em> of the connector's configured site ({@code jcustomer.site.key}).
+ *       The stock {@link Action} contract only guarantees an <em>authenticated</em> user
  *       ({@link #isRequireAuthenticatedUser()} defaults to {@code true}); without this gate any
  *       logged-in low-privilege user (e.g. a site contributor) could read and overwrite the
  *       Salesforce credentials or retarget the integration.</li>
@@ -56,14 +60,14 @@ public abstract class AbstractSfdcAdminAction extends Action {
     public final ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                         JCRSessionWrapper session, Map<String, List<String>> params,
                                         URLResolver url) throws Exception {
-        requireServerAdmin();
+        requireAdmin();
         requireSameOrigin(req);
         return doAuthorizedExecute(req, ctx, res, session, params, url);
     }
 
     /**
-     * Executes the action logic. Only reached once the caller is a server administrator and the
-     * request is same-origin.
+     * Executes the action logic. Only reached once the caller is an administrator (server or the
+     * connector site) and the request is same-origin.
      */
     protected abstract ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx,
                                                         Resource res, JCRSessionWrapper session,
@@ -72,17 +76,53 @@ public abstract class AbstractSfdcAdminAction extends Action {
 
     // ── Security controls ───────────────────────────────────────────────────────
 
-    /** Rejects any caller that is not the root user or a member of the global administrators group. */
-    private void requireServerAdmin() throws JahiaForbiddenAccessException {
+    /** OSGi configuration PID carrying {@code jcustomer.site.key}. */
+    private static final String CONFIG_PID = "org.jahia.community.jcustomer.sfdc";
+    /** Fallback site key when the configuration is absent (matches the shipped module default). */
+    private static final String DEFAULT_SITE_KEY = "mysoprahr";
+
+    /**
+     * Rejects any caller that is not an administrator. Allowed principals: the {@code root} user, a
+     * member of the global {@code /groups/administrators} group (server administrator), or a member
+     * of the connector site's {@code site-administrators} group (site administrator of the site the
+     * connector serves — {@code jcustomer.site.key}).
+     */
+    private void requireAdmin() throws JahiaForbiddenAccessException {
         JahiaUser user = getCurrentUser();
-        boolean allowed = user != null
-                && !JahiaUserManagerService.isGuest(user)
-                && JahiaGroupManagerService.getInstance().isAdminMember(user.getUsername(), null);
+        boolean allowed = false;
+        if (user != null && !JahiaUserManagerService.isGuest(user)) {
+            JahiaGroupManagerService groups = JahiaGroupManagerService.getInstance();
+            allowed = groups.isAdminMember(user.getUsername(), null)                 // server administrator
+                    || groups.isAdminMember(user.getUsername(), connectorSiteKey()); // site administrator of the connector site
+        }
         if (!allowed) {
             logger.warn("[SFDC-Auth] Forbidden '{}' attempt by non-admin user '{}'",
                     getName(), user == null ? "<anonymous>" : user.getUsername());
-            throw new JahiaForbiddenAccessException("Server administrator privilege is required");
+            throw new JahiaForbiddenAccessException("Administrator privilege is required");
         }
+    }
+
+    /**
+     * Resolves the connector's site key from the {@code org.jahia.community.jcustomer.sfdc} OSGi
+     * configuration, falling back to {@link #DEFAULT_SITE_KEY}. Read-only; never creates a config.
+     */
+    private String connectorSiteKey() {
+        try {
+            ConfigurationAdmin ca = BundleUtils.getOsgiService(ConfigurationAdmin.class, null);
+            if (ca != null) {
+                Configuration[] cfgs = ca.listConfigurations("(service.pid=" + CONFIG_PID + ")");
+                if (cfgs != null && cfgs.length > 0 && cfgs[0].getProperties() != null) {
+                    Object v = cfgs[0].getProperties().get("jcustomer.site.key");
+                    if (v != null && !v.toString().isBlank()) {
+                        return v.toString();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("[SFDC-Auth] Could not read site key from config, using default '{}': {}",
+                    DEFAULT_SITE_KEY, e.getMessage());
+        }
+        return DEFAULT_SITE_KEY;
     }
 
     /**
