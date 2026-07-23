@@ -14,6 +14,7 @@ import org.osgi.service.component.annotations.Reference;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.BufferedReader;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +25,7 @@ import java.util.Map;
  * Body (JSON): { instanceUrl, clientId, sfUsername, privateKey, apiVersion, enabled }
  */
 @Component(service = Action.class, immediate = true)
-public class SaveConnectionAction extends Action {
+public class SaveConnectionAction extends AbstractSfdcAdminAction {
 
     private ConnectorConfigService configService;
     private SfdcAuthService        authService;
@@ -34,7 +35,7 @@ public class SaveConnectionAction extends Action {
     @Override public String getName() { return "saveConnection"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         try {
@@ -46,6 +47,11 @@ public class SaveConnectionAction extends Action {
                 if (json.has(key)) values.put(key, json.getString(key));
             }
 
+            // SSRF guard: the instance URL is later used verbatim as the base for outbound HTTP
+            // calls that carry the org's signed JWT / OAuth token, so it must point at Salesforce
+            // and nowhere else. Reject anything that is not an https Salesforce host.
+            validateInstanceUrl(values.get("instanceUrl"));
+
             configService.saveConnection(values);
             authService.invalidateToken(); // force re-auth with new credentials
 
@@ -54,6 +60,41 @@ public class SaveConnectionAction extends Action {
             GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("error", e.getMessage()).toString(), 500);
         }
         return ActionResult.OK;
+    }
+
+    /**
+     * Validates that the Salesforce instance URL is an {@code https} URL whose host is a Salesforce
+     * domain. This blocks SSRF / credential-exfiltration: without it, an admin could be tricked
+     * (or a compromised admin could choose) to point the connector at an internal address or an
+     * attacker-controlled host, which then receives the org's RSA-signed JWT bearer assertion.
+     *
+     * @throws IllegalArgumentException if the URL is missing, not https, or not a Salesforce host
+     */
+    static void validateInstanceUrl(String instanceUrl) {
+        if (instanceUrl == null || instanceUrl.isBlank()) {
+            throw new IllegalArgumentException("instanceUrl is required");
+        }
+        URI uri;
+        try {
+            uri = URI.create(instanceUrl.trim());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("instanceUrl is not a valid URL");
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new IllegalArgumentException("instanceUrl must use https");
+        }
+        String host = uri.getHost();
+        if (host == null) {
+            throw new IllegalArgumentException("instanceUrl has no host");
+        }
+        host = host.toLowerCase();
+        boolean allowed = host.equals("salesforce.com")
+                || host.endsWith(".salesforce.com")
+                || host.endsWith(".force.com");
+        if (!allowed) {
+            throw new IllegalArgumentException(
+                    "instanceUrl host '" + host + "' is not a Salesforce domain");
+        }
     }
 
     private String readBody(HttpServletRequest req) throws Exception {

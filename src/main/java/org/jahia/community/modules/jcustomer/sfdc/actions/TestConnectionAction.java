@@ -20,14 +20,14 @@ import java.util.Map;
  * POST *.testConnection.do → { ok: true, instanceUrl } or { ok: false, error }
  */
 @Component(service = Action.class, immediate = true)
-public class TestConnectionAction extends Action {
+public class TestConnectionAction extends AbstractSfdcAdminAction {
 
     private SfdcApiClient apiClient;
     @Reference public void setApiClient(SfdcApiClient s) { this.apiClient = s; }
     @Override public String getName() { return "testConnection"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         try {

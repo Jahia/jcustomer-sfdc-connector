@@ -21,14 +21,14 @@ import java.util.Map;
  * POST *.getConnection.do
  */
 @Component(service = Action.class, immediate = true)
-public class GetConnectionAction extends Action {
+public class GetConnectionAction extends AbstractSfdcAdminAction {
 
     private ConnectorConfigService configService;
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Override public String getName() { return "getConnection"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         Map<String, String> conn = configService.loadConnection();

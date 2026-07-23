@@ -97,9 +97,10 @@ public class SfdcSyncService {
 
             if (contactMappings.isEmpty()) return;
 
-            // Query only this contact
+            // Query only this contact — escape the email before interpolating it into the SOQL
+            // string literal (SOQL injection guard; the email originates from a login event).
             String soql = buildSoql(contactMappings, accountMappings, 0) +
-                " AND Email = '" + email.replace("'", "\\'") + "'";
+                " AND Email = '" + soqlEscape(email) + "'";
 
             List<Map<String, Object>> contacts = apiClient.query(soql);
             if (contacts.isEmpty()) {
@@ -224,6 +225,18 @@ public class SfdcSyncService {
     private static String str(Map<String, Object> m, String key) {
         Object v = m.get(key);
         return v == null ? null : v.toString();
+    }
+
+    /**
+     * Escapes a value for safe inclusion in a SOQL single-quoted string literal.
+     * Backslash is escaped first (so it cannot cancel a following escape), then the quote
+     * characters Salesforce requires escaped. Prevents SOQL injection / query breakage.
+     */
+    private static String soqlEscape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\"", "\\\"");
     }
 
     /**

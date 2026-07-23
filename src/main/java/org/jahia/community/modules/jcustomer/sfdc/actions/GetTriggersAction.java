@@ -17,14 +17,14 @@ import java.util.Map;
 
 /** Returns saved trigger configuration (login enable, scheduler enable+cron). POST *.getTriggers.do */
 @Component(service = Action.class, immediate = true)
-public class GetTriggersAction extends Action {
+public class GetTriggersAction extends AbstractSfdcAdminAction {
 
     private ConnectorConfigService configService;
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Override public String getName() { return "getTriggers"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         Map<String, String> triggers = configService.loadTriggers();
