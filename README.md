@@ -6,13 +6,14 @@ connection, map fields, and drive the sync in both directions.
 
 - **Inbound (SFDC → jCustomer):** Salesforce **Contact, Account and Lead** data → jCustomer profile
   properties (scheduled batch, on-login, or manual).
-- **Outbound (jCustomer → SFDC):** jCustomer profiles → Salesforce **Lead and/or Contact** records
-  (poll-based: scheduled or manual), matched by a stored SFDC id or email, created when missing.
+- **Outbound (jCustomer → SFDC):** jCustomer profiles → a Salesforce **Lead _or_ Contact** (a single
+  chosen target object), poll-based (scheduled or manual), matched by a stored SFDC id or email,
+  created when missing.
 
 <!-- -->
 
 - **Module:** `org.jahia.community.modules:jcustomer-sfdc-connector`
-- **Version:** `2.0.0`
+- **Version:** `2.1.0`
 - **Platform:** Jahia 8.2 (parent POM `org.jahia.modules:jahia-modules:8.2.0.0`), Java 17
 - **Front-end:** React 18 UI extension (Webpack / Module Federation, `@jahia/ui-extender`, `@jahia/moonstone`)
 
@@ -54,14 +55,14 @@ directions.
 Poll-based, following the approach of Jahia's official [Workato Unomi connector](https://github.com/Jahia/workato-unomi-connector) — no custom Unomi plugin, no webhook, nothing deployed into the jCustomer container:
 
 1. Poll `/cxs/profiles/search` for profiles changed since the last run (`systemProperties.lastUpdated`), and `/cxs/events/search` for recent **form** events.
-2. For each changed profile (with an email), push to **Lead** and/or **Contact** — whichever has an outbound mapping.
+2. For each changed profile (with an email), push to the configured **target object** — **Lead** or **Contact** (chosen in the Triggers tab).
 3. Resolve the target record by the stored id (`SFDC_LeadId` / `SFDC_ContactId`) then email; **update** if found, **create** if not. The new id is written back to the profile for idempotent future updates.
 
 Create requirements are per object (Salesforce rules): **Lead** needs `LastName` + `Company`, **Contact** needs `LastName`. Missing → skipped with a warning (updates still work). Converted Leads are excluded from matching.
 
 | Trigger | Component | When |
 |---|---|---|
-| Scheduled poll | `SfdcOutboundReconcileJob` (Quartz) | cron (default every 15 min) |
+| Scheduled poll | `SfdcOutboundReconcileJob` (Quartz) | cron set via a friendly builder (Every N minutes / hour / day / week / month) |
 | Manual | `TriggerOutboundReconcileAction` | admin clicks "Sync now" |
 
 ---
@@ -82,11 +83,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.0.0.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.1.0.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.0.0.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.1.0.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -118,7 +119,7 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 - `triggers/` — inbound `loginEnabled`, `schedulerEnabled`, `schedulerCron`
 - `syncState/` — last inbound run
 - `outbound/mapping/{Lead,Contact}` — outbound `jcProperty → sfField` entries
-- `outbound/triggers/` — `onProfileUpdate`, `onFormSubmission`, `reconcileEnabled`, `reconcileCron`
+- `outbound/triggers/` — `outboundObject` (Lead | Contact), `onProfileUpdate`, `onFormSubmission`, `reconcileEnabled`, `reconcileCron`
 - `outbound/syncState/` — last outbound run + poll watermark
 
 ---
@@ -129,7 +130,7 @@ jContent → **Administration → SF Connector** (route `/sfdc-connector`). Thre
 
 - **Connection** *(shared)* — Salesforce Connected App credentials (PEM private key); "Test connection".
 - **SFDC → jCustomer** — Field Mapping (Contact/Account/Lead) · Synchronisation (state + "Sync now") · inbound triggers.
-- **jCustomer → SFDC** — Field Mapping (Lead/Contact) · What to sync (profile updates / form submissions) + Schedule (enable + cron + "Sync now") · last outbound run.
+- **jCustomer → SFDC** — Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + what to sync (profile updates / form submissions) + Schedule (friendly cron builder, down to every minute) + "Sync now" · last outbound run.
 
 ---
 
