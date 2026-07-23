@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dropdown, Input, Loader, Separator, Switch, Typography } from '@jahia/moonstone';
+import { Button, Dropdown, Loader, Separator, Switch, Typography } from '@jahia/moonstone';
 import { getOutboundTriggers, saveOutboundTriggers, triggerOutboundReconcile } from '../api';
+import CronBuilder from './CronBuilder';
 import classes from './MappingTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
+const DEFAULT_CRON = '0 0 * * * ?';   // hourly (CronBuilder's finest granularity)
 const isOn = v => v === true || v === 'true';
 
 export default function OutboundTriggersTab() {
     const { t } = useTranslation(NS);
-    const [cfg, setCfg] = useState({ onProfileUpdate: 'true', onFormSubmission: 'true', outboundObject: 'Lead', reconcileEnabled: 'false', reconcileCron: '0 0/15 * * * ?' });
+    const [cfg, setCfg] = useState({ onProfileUpdate: 'true', onFormSubmission: 'true', outboundObject: 'Lead', reconcileEnabled: 'false', reconcileCron: DEFAULT_CRON });
     const [loading, setLoading] = useState(true);
     const [saving,  setSaving]  = useState(false);
     const [polling, setPolling] = useState(false);
@@ -36,7 +38,7 @@ export default function OutboundTriggersTab() {
                 onFormSubmission: isOn(cfg.onFormSubmission),
                 outboundObject:   cfg.outboundObject === 'Contact' ? 'Contact' : 'Lead',
                 reconcileEnabled: isOn(cfg.reconcileEnabled),
-                reconcileCron:    (cfg.reconcileCron || '0 0/15 * * * ?').trim()
+                reconcileCron:    (cfg.reconcileCron || DEFAULT_CRON).trim()
             });
             setMsg({ ok: true, text: t(`${NS}:outbound.triggers.saved`) });
         } catch (e) {
@@ -120,11 +122,12 @@ export default function OutboundTriggersTab() {
                     </div>
                 </label>
 
-                <div style={{ marginTop: 12 }}>
-                    <Typography variant="caption" weight="semiBold">{t(`${NS}:outbound.triggers.schedule.cron`)}</Typography>
-                    <Input value={cfg.reconcileCron || ''} isDisabled={!isOn(cfg.reconcileEnabled)}
-                        onChange={e => set('reconcileCron', e.target.value)} style={{ maxWidth: 280 }} />
-                </div>
+                {isOn(cfg.reconcileEnabled) && (
+                    <div className={classes.cronRow} style={{ marginTop: 12 }}>
+                        <CronBuilder value={cfg.reconcileCron || DEFAULT_CRON}
+                            onChange={cron => set('reconcileCron', cron)} />
+                    </div>
+                )}
 
                 <Button style={{ marginTop: 16 }} variant="outlined"
                     label={polling ? t(`${NS}:outbound.triggers.pollRunning`) : t(`${NS}:outbound.triggers.pollNow`)}

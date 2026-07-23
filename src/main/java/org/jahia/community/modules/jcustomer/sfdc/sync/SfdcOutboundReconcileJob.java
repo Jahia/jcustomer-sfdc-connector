@@ -70,9 +70,12 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
     private void applySchedule() throws Exception {
         Map<String, String> t = configService.loadOutboundTriggers();
         boolean enabled = "true".equalsIgnoreCase(t.getOrDefault("reconcileEnabled", "false"));
-        String cron     = t.getOrDefault("reconcileCron", "0 0/15 * * * ?");
+        String cron     = t.getOrDefault("reconcileCron", "0 0 * * * ?");
 
+        // Remove any existing trigger AND job first — scheduleJob(jobDetail, trigger) throws
+        // ObjectAlreadyExistsException if the job is already stored (e.g. from a previous enable).
         try { schedulerService.getScheduler().unscheduleJob(TRIGGER_NAME, jobDetail.getGroup()); } catch (Exception ignored) {}
+        try { schedulerService.getScheduler().deleteJob(jobDetail.getName(), jobDetail.getGroup()); } catch (Exception ignored) {}
 
         if (!enabled) {
             logger.info("[SFDC-Reconcile] Reconcile disabled — not scheduled");

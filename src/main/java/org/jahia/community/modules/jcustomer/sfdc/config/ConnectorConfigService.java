@@ -159,7 +159,7 @@ public class ConnectorConfigService {
         result.put("outboundObject",   "Lead");
         // reconcile (poll) — catches profile changes that emit no Unomi event (console/REST edits)
         result.put("reconcileEnabled", "false");
-        result.put("reconcileCron",    "0 0/15 * * * ?");
+        result.put("reconcileCron",    "0 0 * * * ?");
         try {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
                 if (!session.nodeExists(OUTBOUND_TRIGGERS_NODE)) return null;
