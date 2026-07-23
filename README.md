@@ -1,6 +1,8 @@
 # jCustomer – Salesforce Connector
 
-A Jahia OSGi module that syncs **Salesforce** Contact and Account data into **Apache Unomi (jCustomer)** profile properties. It ships a jContent back-office admin panel to configure the Salesforce connection, map Salesforce fields to jCustomer profile properties, and drive synchronization (scheduled batch, on-login, or manual).
+A Jahia OSGi module that syncs **Salesforce** Contact, Account and Lead data into **Apache Unomi (jCustomer)** profile properties. It ships a jContent back-office admin panel to configure the Salesforce connection, map Salesforce fields to jCustomer profile properties, and drive synchronization (scheduled batch, on-login, or manual).
+
+Contact and Lead are top-level objects matched to jCustomer profiles by email (Contact also by a stored `SFDC_ContactId`); Account fields are synced as a relationship of the Contact. Converted Leads are skipped (they already exist as Contacts).
 
 - **Module:** `org.jahia.community.modules:jcustomer-sfdc-connector`
 - **Version:** `1.1.0-SNAPSHOT`

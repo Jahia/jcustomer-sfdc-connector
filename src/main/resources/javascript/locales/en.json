@@ -5,7 +5,7 @@
       "panel": {
         "label": "Salesforce → jCustomer Sync",
         "title": "Salesforce - jCustomer Connector",
-        "subtitle": "Sync Contact and Account data from Salesforce into jCustomer profile properties."
+        "subtitle": "Sync Contact, Account and Lead data from Salesforce into jCustomer profile properties."
       },
       "tab": {
         "connection": "Connection",
@@ -25,7 +25,7 @@
     },
     "mapping": {
       "title":          "Field Mapping",
-      "subtitle":       "Map Salesforce Contact and Account fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
+      "subtitle":       "Map Salesforce Contact, Account and Lead fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
       "col": {
         "sfField":    "Salesforce Field",
         "jcProperty": "jCustomer Property"

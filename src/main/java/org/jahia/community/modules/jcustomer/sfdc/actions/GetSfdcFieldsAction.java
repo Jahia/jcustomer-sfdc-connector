@@ -31,6 +31,9 @@ public class GetSfdcFieldsAction extends AbstractSfdcAdminAction {
 
     private static final Logger logger = LoggerFactory.getLogger(GetSfdcFieldsAction.class);
 
+    /** Salesforce objects exposed in the mapping UI. */
+    static final String[] SFDC_OBJECTS = {"Contact", "Account", "Lead"};
+
     private SfdcApiClient apiClient;
 
     @Reference
@@ -42,21 +45,19 @@ public class GetSfdcFieldsAction extends AbstractSfdcAdminAction {
     protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
-        try {
-            List<Map<String, String>> contactFields = apiClient.describeObject("Contact");
-            List<Map<String, String>> accountFields = apiClient.describeObject("Account");
-
-            JSONObject response = new JSONObject();
-            response.put("Contact", toJsonArray(contactFields));
-            response.put("Account", toJsonArray(accountFields));
-
-            write(ctx.getResponse(), response.toString());
-            return ActionResult.OK;
-        } catch (Exception e) {
-            logger.error("[SFDC-Action] getSfdcFields failed", e);
-            write(ctx.getResponse(), new JSONObject().put("error", e.getMessage()).toString(), 500);
-            return ActionResult.OK;
+        // Describe each object independently so one object failing (e.g. no Lead access)
+        // does not blank out the others in the mapping UI.
+        JSONObject response = new JSONObject();
+        for (String sfObject : SFDC_OBJECTS) {
+            try {
+                response.put(sfObject, toJsonArray(apiClient.describeObject(sfObject)));
+            } catch (Exception e) {
+                logger.warn("[SFDC-Action] Describe {} failed: {} — returning empty field list", sfObject, e.getMessage());
+                response.put(sfObject, new JSONArray());
+            }
         }
+        write(ctx.getResponse(), response.toString());
+        return ActionResult.OK;
     }
 
     private JSONArray toJsonArray(List<Map<String, String>> fields) {

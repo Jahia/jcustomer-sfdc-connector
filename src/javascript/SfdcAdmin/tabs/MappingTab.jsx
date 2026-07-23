@@ -5,14 +5,17 @@ import { getSfdcFields, getJcProperties, getMapping, saveMapping } from '../api'
 import classes from './MappingTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
-const SFDC_OBJECTS = ['Contact', 'Account'];
+const SFDC_OBJECTS = ['Contact', 'Account', 'Lead'];
+const emptyByObject = () => SFDC_OBJECTS.reduce((acc, o) => ({ ...acc, [o]: [] }), {});
+const byObject = (data, pick) => SFDC_OBJECTS.reduce(
+    (acc, o) => ({ ...acc, [o]: Array.isArray(pick(data, o)) ? pick(data, o) : [] }), {});
 
 export default function MappingTab() {
     const { t } = useTranslation(NS);
     const [sfObject,  setSfObject]  = useState('Contact');
-    const [sfFields,  setSfFields]  = useState({ Contact: [], Account: [] });
+    const [sfFields,  setSfFields]  = useState(emptyByObject());
     const [jcProps,   setJcProps]   = useState([]);
-    const [mappings,  setMappings]  = useState({ Contact: [], Account: [] });
+    const [mappings,  setMappings]  = useState(emptyByObject());
     const [loading,   setLoading]   = useState(true);
     const [saving,    setSaving]    = useState(false);
     const [msg,       setMsg]       = useState(null);
@@ -28,11 +31,8 @@ export default function MappingTab() {
         ]);
 
         if (fieldsR.status === 'fulfilled') {
-            const fields = fieldsR.value;
-            setSfFields({
-                Contact: Array.isArray(fields?.Contact) ? fields.Contact : [],
-                Account: Array.isArray(fields?.Account) ? fields.Account : [],
-            });
+            const fields = fieldsR.value || {};
+            setSfFields(byObject(fields, (d, o) => d[o]));
         }
 
         if (propsR.status === 'fulfilled') {
@@ -42,11 +42,8 @@ export default function MappingTab() {
         }
 
         if (mappingR.status === 'fulfilled') {
-            const mapping = mappingR.value;
-            setMappings({
-                Contact: Array.isArray(mapping?.Contact) ? mapping.Contact : [],
-                Account: Array.isArray(mapping?.Account) ? mapping.Account : [],
-            });
+            const mapping = mappingR.value || {};
+            setMappings(byObject(mapping, (d, o) => d[o]));
         }
 
         // Surface any errors without blocking the render
