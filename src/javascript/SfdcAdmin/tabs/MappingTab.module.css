@@ -11,3 +11,10 @@
 .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; }
 .alertSuccess { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
 .alertError { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+/* Trigger rows — text on the left, control on the right (consistent with SFDC → jCustomer) */
+.triggers { display: flex; flex-direction: column; gap: 16px; }
+.triggerRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; max-width: 640px; }
+.triggerInfo { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.cronRow { display: flex; flex-direction: column; gap: 6px; padding-left: 16px; border-left: 3px solid var(--color-gray-200, #e5e7eb); max-width: 640px; }
+.sectionTitle { margin-top: 8px; }

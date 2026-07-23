@@ -75,63 +75,72 @@ export default function OutboundTriggersTab() {
 
             <Separator />
 
-            <div style={{ marginTop: 16, maxWidth: 640 }}>
-                <Typography variant="subheading" weight="semiBold">{t(`${NS}:outbound.triggers.what.title`)}</Typography>
-                <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.what.subtitle`)}</Typography>
+            {/* What to sync */}
+            <Typography variant="subheading" weight="semiBold" className={classes.sectionTitle}>{t(`${NS}:outbound.triggers.what.title`)}</Typography>
+            <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.what.subtitle`)}</Typography>
 
-                <div style={{ marginTop: 16 }}>
-                    <Typography variant="caption" weight="semiBold">{t(`${NS}:outbound.triggers.target.label`)}</Typography>
-                    <Dropdown size="medium" style={{ maxWidth: 280 }}
+            <div className={classes.triggers}>
+                <div className={classes.triggerRow}>
+                    <div className={classes.triggerInfo}>
+                        <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.target.label`)}</Typography>
+                        <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.target.desc`)}</Typography>
+                    </div>
+                    <Dropdown size="medium"
                         value={cfg.outboundObject === 'Contact' ? 'Contact' : 'Lead'}
                         data={[
                             { label: t(`${NS}:outbound.triggers.target.lead`), value: 'Lead' },
                             { label: t(`${NS}:outbound.triggers.target.contact`), value: 'Contact' }
                         ]}
                         onChange={(e, item) => set('outboundObject', item?.value ?? 'Lead')} />
-                    <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.target.desc`)}</Typography>
                 </div>
 
-                <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 20 }}>
-                    <Switch checked={isOn(cfg.onProfileUpdate)} onChange={e => set('onProfileUpdate', e.target.checked)} />
-                    <div>
+                <div className={classes.triggerRow}>
+                    <div className={classes.triggerInfo}>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.profileUpdate.label`)}</Typography>
                         <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.profileUpdate.desc`)}</Typography>
                     </div>
-                </label>
+                    <Switch checked={isOn(cfg.onProfileUpdate)} label=""
+                        onChange={e => set('onProfileUpdate', e.target.checked)} />
+                </div>
 
-                <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 16 }}>
-                    <Switch checked={isOn(cfg.onFormSubmission)} onChange={e => set('onFormSubmission', e.target.checked)} />
-                    <div>
+                <div className={classes.triggerRow}>
+                    <div className={classes.triggerInfo}>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.formSubmission.label`)}</Typography>
                         <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.formSubmission.desc`)}</Typography>
                     </div>
-                </label>
+                    <Switch checked={isOn(cfg.onFormSubmission)} label=""
+                        onChange={e => set('onFormSubmission', e.target.checked)} />
+                </div>
             </div>
 
             <Separator />
 
-            <div style={{ marginTop: 16, maxWidth: 640 }}>
-                <Typography variant="subheading" weight="semiBold">{t(`${NS}:outbound.triggers.schedule.title`)}</Typography>
-                <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.schedule.subtitle`)}</Typography>
+            {/* Schedule */}
+            <Typography variant="subheading" weight="semiBold" className={classes.sectionTitle}>{t(`${NS}:outbound.triggers.schedule.title`)}</Typography>
+            <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.schedule.subtitle`)}</Typography>
 
-                <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 16 }}>
-                    <Switch checked={isOn(cfg.reconcileEnabled)} onChange={e => set('reconcileEnabled', e.target.checked)} />
-                    <div>
+            <div className={classes.triggers}>
+                <div className={classes.triggerRow}>
+                    <div className={classes.triggerInfo}>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.schedule.enabled.label`)}</Typography>
                         <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.schedule.enabled.desc`)}</Typography>
                     </div>
-                </label>
+                    <Switch checked={isOn(cfg.reconcileEnabled)} label=""
+                        onChange={e => set('reconcileEnabled', e.target.checked)} />
+                </div>
 
                 {isOn(cfg.reconcileEnabled) && (
-                    <div className={classes.cronRow} style={{ marginTop: 12 }}>
+                    <div className={classes.cronRow}>
                         <CronBuilder value={cfg.reconcileCron || DEFAULT_CRON}
                             onChange={cron => set('reconcileCron', cron)} />
                     </div>
                 )}
 
-                <Button style={{ marginTop: 16 }} variant="outlined"
-                    label={polling ? t(`${NS}:outbound.triggers.pollRunning`) : t(`${NS}:outbound.triggers.pollNow`)}
-                    isDisabled={polling} isLoading={polling} onClick={handlePollNow} />
+                <div>
+                    <Button variant="outlined"
+                        label={polling ? t(`${NS}:outbound.triggers.pollRunning`) : t(`${NS}:outbound.triggers.pollNow`)}
+                        isDisabled={polling} isLoading={polling} onClick={handlePollNow} />
+                </div>
             </div>
 
             {msg && (
