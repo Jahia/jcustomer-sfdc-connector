@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "id": "sfdcWebhookAction",
+    "name": "SFDC Webhook Action",
+    "description": "POSTs to the Jahia SFDC connector outbound webhook so the matched profile is pushed to Salesforce as a Lead.",
+    "systemTags": ["event"],
+    "readOnly": true
+  },
+  "actionExecutor": "sfdcWebhook",
+  "parameters": [
+    { "id": "url", "type": "string", "multivalued": false },
+    { "id": "secret", "type": "string", "multivalued": false }
+  ]
+}

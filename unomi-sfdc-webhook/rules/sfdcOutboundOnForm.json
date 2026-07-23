@@ -1,0 +1,6 @@
+{
+  "metadata": { "id": "sfdcOutboundOnForm", "name": "SFDC outbound on form submission", "scope": "systemscope", "enabled": true },
+  "condition": { "type": "eventTypeCondition", "parameterValues": { "eventTypeId": "form" } },
+  "actions": [ { "type": "sfdcWebhookAction", "parameterValues": { "url": "http://JAHIA_HOST:8080/cms/render/live/en/sites/systemsite.sfdcOutboundWebhook.do", "secret": "REPLACE_WITH_WEBHOOK_SECRET" } } ],
+  "priority": 5, "raiseEventOnlyOnce": false
+}
