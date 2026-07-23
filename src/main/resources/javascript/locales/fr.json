@@ -75,9 +75,9 @@
     "outbound": {
       "mapping": {
         "title":    "Mapping des champs sortants",
-        "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead Salesforce. Les Leads correspondants sont mis à jour ; les profils sans correspondance créent un nouveau Lead.",
-        "saved":    "Mapping Lead sortant enregistré",
-        "requiredHint": "Salesforce exige {{fields}} pour créer un Lead — mappez-les, sinon seuls les Leads existants seront mis à jour (aucun nouveau Lead créé)."
+        "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead et Contact Salesforce. Les enregistrements correspondants sont mis à jour ; les profils sans correspondance en créent un nouveau.",
+        "saved":    "Mapping {{obj}} sortant enregistré",
+        "requiredHint": "Salesforce exige {{fields}} pour créer un {{obj}} — mappez-les, sinon seuls les {{obj}} existants seront mis à jour."
       },
       "triggers": {
         "title":    "Synchronisation vers Salesforce",

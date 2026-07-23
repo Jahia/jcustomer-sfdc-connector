@@ -75,9 +75,9 @@
     "outbound": {
       "mapping": {
         "title":    "Outbound Field Mapping",
-        "subtitle": "Map jCustomer profile properties to Salesforce Lead fields. Matched Leads are updated; unmatched profiles create a new Lead.",
-        "saved":    "Outbound Lead mapping saved",
-        "requiredHint": "Salesforce requires {{fields}} to create a Lead — map them, or only existing Leads will be updated (no new Leads created)."
+        "subtitle": "Map jCustomer profile properties to Salesforce Lead and Contact fields. Matched records are updated; unmatched profiles create a new one.",
+        "saved":    "Outbound {{obj}} mapping saved",
+        "requiredHint": "Salesforce requires {{fields}} to create a {{obj}} — map them, or only existing {{obj}} records will be updated."
       },
       "triggers": {
         "title":    "Sync to Salesforce",

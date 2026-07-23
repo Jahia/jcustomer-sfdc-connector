@@ -128,14 +128,16 @@ public class SfdcApiClient {
     // ── Writes (jCustomer → SFDC) ───────────────────────────────────────────────
 
     /**
-     * Returns the Id of the most recently modified non-converted Lead with the given email,
-     * or {@code null} if none. The email is escaped for the SOQL string literal.
+     * Returns the Id of the most recently modified record of {@code type} (e.g. "Lead" or
+     * "Contact") with the given email, or {@code null} if none. For Lead, converted leads are
+     * excluded. The email is escaped for the SOQL string literal.
      */
-    public String findLeadIdByEmail(String email) throws Exception {
+    public String findSObjectIdByEmail(String type, String email) throws Exception {
         if (email == null || email.isBlank()) return null;
         String escaped = email.replace("\\", "\\\\").replace("'", "\\'");
-        String soql = "SELECT Id FROM Lead WHERE IsConverted = false AND Email = '" + escaped
-                + "' ORDER BY LastModifiedDate DESC LIMIT 1";
+        String where = "Email = '" + escaped + "'";
+        if ("Lead".equals(type)) where += " AND IsConverted = false";
+        String soql = "SELECT Id FROM " + type + " WHERE " + where + " ORDER BY LastModifiedDate DESC LIMIT 1";
         List<Map<String, Object>> rows = query(soql);
         if (rows.isEmpty()) return null;
         Object id = rows.get(0).get("Id");
