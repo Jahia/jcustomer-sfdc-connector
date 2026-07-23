@@ -1,9 +1,0 @@
-{
-  "metadata": { "id": "sfdcOutboundOnProfileUpdate", "name": "SFDC outbound on profile update", "scope": "systemscope", "enabled": true },
-  "condition": { "type": "booleanCondition", "parameterValues": { "operator": "and", "subConditions": [
-      { "type": "eventTypeCondition", "parameterValues": { "eventTypeId": "updateProperties" } },
-      { "type": "profilePropertyCondition", "parameterValues": { "propertyName": "properties.email", "comparisonOperator": "exists" } }
-  ] } },
-  "actions": [ { "type": "sfdcWebhookAction", "parameterValues": { "url": "http://JAHIA_HOST:8080/cms/render/live/en/sites/systemsite.sfdcOutboundWebhook.do", "secret": "REPLACE_WITH_WEBHOOK_SECRET" } } ],
-  "priority": 5, "raiseEventOnlyOnce": false
-}

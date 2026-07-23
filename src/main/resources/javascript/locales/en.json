@@ -80,20 +80,23 @@
         "requiredHint": "Salesforce requires {{fields}} to create a Lead — map them, or only existing Leads will be updated (no new Leads created)."
       },
       "triggers": {
-        "title":    "Event Triggers",
-        "subtitle": "Choose which jCustomer events push a profile to Salesforce as a Lead. Requires the event webhook to be deployed to jCustomer.",
-        "saved":    "Outbound trigger configuration saved",
-        "enabled":        { "label": "Enable event-based push", "desc": "Master switch. When off, no jCustomer event pushes to Salesforce (manual push and scheduled reconcile still work)." },
-        "profileUpdate":  { "label": "On profile update", "desc": "Push when a jCustomer profile is updated. The profile must have an email (used to match or create the Lead)." },
-        "formSubmission": { "label": "On form submission", "desc": "Push when a visitor submits a form tracked by jCustomer." },
-        "reconcileStarted": "Reconcile started in the background — check the last outbound run for results.",
-        "reconcile": {
-          "title":    "Scheduled reconcile",
-          "subtitle": "Periodically push profiles changed since the last run — catches edits that emit no jCustomer event (console / REST / batch), not just tracker activity.",
-          "enabled":  { "label": "Enable scheduled reconcile", "desc": "Run a periodic sweep pushing recently-changed profiles to Salesforce." },
-          "cron":     "Cron expression",
-          "now":      "Reconcile now",
-          "running":  "Reconciling..."
+        "title":    "Sync to Salesforce",
+        "subtitle": "The connector polls jCustomer for changed profiles and pushes them to Salesforce as Leads.",
+        "saved":    "Outbound sync configuration saved",
+        "pollStarted": "Sync started in the background — check the last outbound run for results.",
+        "pollNow":     "Sync now",
+        "pollRunning": "Syncing...",
+        "what": {
+          "title":    "What to sync",
+          "subtitle": "Choose which jCustomer changes are pushed to Salesforce Leads (applies to both scheduled and manual runs)."
+        },
+        "profileUpdate":  { "label": "Profile updates", "desc": "Push profiles whose properties changed since the last run. An email is required to match or create the Lead." },
+        "formSubmission": { "label": "Form submissions", "desc": "Push profiles that submitted a form since the last run." },
+        "schedule": {
+          "title":    "Schedule",
+          "subtitle": "Run the sync automatically on a cron schedule. You can also run it on demand with \"Sync now\".",
+          "enabled":  { "label": "Enable scheduled sync", "desc": "Poll jCustomer periodically and push changed profiles to Salesforce." },
+          "cron":     "Cron expression"
         }
       },
       "sync": {

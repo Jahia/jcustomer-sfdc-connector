@@ -80,20 +80,23 @@
         "requiredHint": "Salesforce exige {{fields}} pour créer un Lead — mappez-les, sinon seuls les Leads existants seront mis à jour (aucun nouveau Lead créé)."
       },
       "triggers": {
-        "title":    "Déclencheurs événementiels",
-        "subtitle": "Choisissez quels événements jCustomer envoient un profil vers Salesforce en tant que Lead. Nécessite le webhook d'événements déployé sur jCustomer.",
-        "saved":    "Configuration des déclencheurs sortants enregistrée",
-        "enabled":        { "label": "Activer l'envoi événementiel", "desc": "Interrupteur principal. Désactivé, aucun événement jCustomer n'envoie vers Salesforce (l'envoi manuel et la réconciliation planifiée restent actifs)." },
-        "profileUpdate":  { "label": "À la mise à jour du profil", "desc": "Envoie lorsqu'un profil jCustomer est mis à jour. Le profil doit avoir un email (utilisé pour retrouver ou créer le Lead)." },
-        "formSubmission": { "label": "À la soumission d'un formulaire", "desc": "Envoie lorsqu'un visiteur soumet un formulaire suivi par jCustomer." },
-        "reconcileStarted": "Réconciliation lancée en arrière-plan — consultez le dernier envoi sortant pour le résultat.",
-        "reconcile": {
-          "title":    "Réconciliation planifiée",
-          "subtitle": "Envoie périodiquement les profils modifiés depuis la dernière exécution — capture les modifications sans événement jCustomer (console / REST / batch), pas seulement l'activité du tracker.",
-          "enabled":  { "label": "Activer la réconciliation planifiée", "desc": "Exécute un balayage périodique envoyant les profils récemment modifiés vers Salesforce." },
-          "cron":     "Expression cron",
-          "now":      "Réconcilier maintenant",
-          "running":  "Réconciliation..."
+        "title":    "Synchronisation vers Salesforce",
+        "subtitle": "Le connecteur interroge jCustomer pour détecter les profils modifiés et les envoie vers Salesforce en tant que Leads.",
+        "saved":    "Configuration de synchronisation sortante enregistrée",
+        "pollStarted": "Synchronisation lancée en arrière-plan — consultez le dernier envoi sortant pour le résultat.",
+        "pollNow":     "Synchroniser maintenant",
+        "pollRunning": "Synchronisation...",
+        "what": {
+          "title":    "Éléments à synchroniser",
+          "subtitle": "Choisissez quelles modifications jCustomer sont envoyées vers Salesforce (s'applique aux exécutions planifiées et manuelles)."
+        },
+        "profileUpdate":  { "label": "Mises à jour de profil", "desc": "Envoie les profils dont les propriétés ont changé depuis la dernière exécution. Un email est requis pour retrouver ou créer le Lead." },
+        "formSubmission": { "label": "Soumissions de formulaire", "desc": "Envoie les profils ayant soumis un formulaire depuis la dernière exécution." },
+        "schedule": {
+          "title":    "Planification",
+          "subtitle": "Exécute la synchronisation automatiquement selon un planning cron. Vous pouvez aussi la lancer à la demande avec « Synchroniser maintenant ».",
+          "enabled":  { "label": "Activer la synchronisation planifiée", "desc": "Interroge jCustomer périodiquement et envoie les profils modifiés vers Salesforce." },
+          "cron":     "Expression cron"
         }
       },
       "sync": {

@@ -11,8 +11,11 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Outbound sync orchestration (jCustomer → Salesforce).
@@ -79,34 +82,65 @@ public class SfdcOutboundSyncService {
      * @param bufferMinutes clock-skew buffer subtracted from the last-run timestamp
      * @param maxProfiles   safety cap on profiles processed per run
      */
+    private static final Pattern UUID_RE =
+            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+
     public void runReconcile(String siteKey, int bufferMinutes, int maxProfiles) {
         long updated = 0, created = 0, errors = 0;
         Instant runStart = Instant.now();
         try {
+            Map<String, String> triggers = configService.loadOutboundTriggers();
+            boolean doProfiles = !"false".equalsIgnoreCase(triggers.getOrDefault("onProfileUpdate", "true"));
+            boolean doForms    = !"false".equalsIgnoreCase(triggers.getOrDefault("onFormSubmission", "true"));
+
             String last = configService.getOutboundReconcileAt();
             Instant cutoff = (last != null)
                     ? Instant.parse(last).minus(bufferMinutes, ChronoUnit.MINUTES)
                     : runStart.minus(24, ChronoUnit.HOURS); // first run: look back a day
-            logger.info("[SFDC-Outbound] Reconcile starting for site={} (changed since {})", siteKey, cutoff);
+            String cutoffIso = cutoff.toString();
+            logger.info("[SFDC-Outbound] Poll starting site={} since={} (profiles={}, forms={})", siteKey, cutoff, doProfiles, doForms);
 
-            List<Map<String, Object>> profiles = profileService.searchProfilesModifiedSince(cutoff.toString(), siteKey, maxProfiles);
-            logger.info("[SFDC-Outbound] Reconcile: {} changed profile(s) to process", profiles.size());
+            Set<String> pushed = new HashSet<>();
 
-            for (Map<String, Object> profile : profiles) {
-                try {
-                    if (pushProfile(profile, siteKey)) created++; else updated++;
-                } catch (Exception e) {
-                    errors++;
-                    logger.error("[SFDC-Outbound] Reconcile error for profile {}: {}", profile.get("itemId"), e.getMessage());
+            // 1) Profiles changed since cutoff (covers profile updates, incl. form-driven property changes).
+            if (doProfiles) {
+                for (Map<String, Object> profile : profileService.searchProfilesModifiedSince(cutoffIso, siteKey, maxProfiles)) {
+                    String id = asString(profile.get("itemId"));
+                    if (id == null || !UUID_RE.matcher(id).matches()) continue; // skip technical / merged profiles
+                    try {
+                        if (pushProfile(profile, siteKey)) created++; else updated++;
+                        pushed.add(id);
+                    } catch (Exception e) {
+                        errors++;
+                        logger.error("[SFDC-Outbound] Poll error for profile {}: {}", id, e.getMessage());
+                    }
                 }
             }
+
+            // 2) Form events since cutoff — push each event's profile once (not already pushed above).
+            if (doForms) {
+                for (Map<String, Object> event : profileService.searchFormEventsSince(cutoffIso, siteKey, maxProfiles)) {
+                    String pid = asString(event.get("profileId"));
+                    if (pid == null || !UUID_RE.matcher(pid).matches() || pushed.contains(pid)) continue;
+                    try {
+                        Map<String, Object> profile = profileService.getProfileById(pid, siteKey);
+                        if (profile == null) continue;
+                        if (pushProfile(profile, siteKey)) created++; else updated++;
+                        pushed.add(pid);
+                    } catch (Exception e) {
+                        errors++;
+                        logger.error("[SFDC-Outbound] Poll error for form-event profile {}: {}", pid, e.getMessage());
+                    }
+                }
+            }
+
             // Advance the watermark to the run start so edits during/after the run are caught next time.
             configService.setOutboundReconcileAt(runStart.toString());
-            configService.saveOutboundSyncState("reconcile: " + profiles.size() + " processed", updated, created, errors);
-            logger.info("[SFDC-Outbound] Reconcile complete — created={}, updated={}, errors={}", created, updated, errors);
+            configService.saveOutboundSyncState("poll: " + pushed.size() + " profiles", updated, created, errors);
+            logger.info("[SFDC-Outbound] Poll complete — profiles={}, created={}, updated={}, errors={}", pushed.size(), created, updated, errors);
         } catch (Exception e) {
-            configService.saveOutboundSyncState("reconcile-error: " + e.getMessage(), updated, created, errors + 1);
-            logger.error("[SFDC-Outbound] Reconcile failed", e);
+            configService.saveOutboundSyncState("poll-error: " + e.getMessage(), updated, created, errors + 1);
+            logger.error("[SFDC-Outbound] Poll failed", e);
         }
     }
 
