@@ -39,6 +39,7 @@ public class ConnectorConfigService {
     public static final String OUTBOUND_MAPPING_NODE  = CONFIG_ROOT + "/outbound/mapping";
     public static final String OUTBOUND_STATE_NODE    = CONFIG_ROOT + "/outbound/syncState";
     public static final String OUTBOUND_TRIGGERS_NODE = CONFIG_ROOT + "/outbound/triggers";
+    public static final String OUTBOUND_WEBHOOK_NODE  = CONFIG_ROOT + "/outbound/webhook";
 
     // ── Connection ────────────────────────────────────────────────────────────
 
@@ -145,6 +146,34 @@ public class ConnectorConfigService {
             return null;
         });
         logger.info("[SFDC-Config] Mapping saved at {}/{} ({} entries)", baseNode, sfObject, mappings.size());
+    }
+
+    // ── Outbound webhook shared secret ───────────────────────────────────────────
+
+    /**
+     * Returns the shared secret used to authenticate the outbound event webhook (Unomi → Jahia),
+     * generating and persisting a new random one on first use. Stored in JCR (not in the module's
+     * OSGi config) so it survives redeploys and is never committed to source.
+     */
+    public synchronized String getOrCreateWebhookSecret() {
+        try {
+            return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                JCRNodeWrapper node = ensurePath(session, OUTBOUND_WEBHOOK_NODE);
+                if (node.hasProperty("secret") && !node.getProperty("secret").getString().isBlank()) {
+                    return node.getProperty("secret").getString();
+                }
+                byte[] buf = new byte[24];
+                new java.security.SecureRandom().nextBytes(buf);
+                String secret = java.util.HexFormat.of().formatHex(buf);
+                node.setProperty("secret", secret);
+                session.save();
+                logger.info("[SFDC-Config] Generated new outbound webhook secret");
+                return secret;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Failed to get/create webhook secret", e);
+            return null;
+        }
     }
 
     // ── Outbound triggers (which jCustomer events push to SFDC) ──────────────────
