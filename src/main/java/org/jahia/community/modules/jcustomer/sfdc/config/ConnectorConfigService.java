@@ -155,6 +155,8 @@ public class ConnectorConfigService {
         result.put("enabled",          "false");
         result.put("onProfileUpdate",  "true");
         result.put("onFormSubmission", "true");
+        // Single Salesforce target object for outbound (Lead OR Contact — not both).
+        result.put("outboundObject",   "Lead");
         // reconcile (poll) — catches profile changes that emit no Unomi event (console/REST edits)
         result.put("reconcileEnabled", "false");
         result.put("reconcileCron",    "0 0/15 * * * ?");
@@ -162,7 +164,7 @@ public class ConnectorConfigService {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
                 if (!session.nodeExists(OUTBOUND_TRIGGERS_NODE)) return null;
                 JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_TRIGGERS_NODE);
-                for (String prop : new String[]{"enabled","onProfileUpdate","onFormSubmission","reconcileEnabled","reconcileCron"}) {
+                for (String prop : new String[]{"enabled","onProfileUpdate","onFormSubmission","outboundObject","reconcileEnabled","reconcileCron"}) {
                     if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
                 }
                 return null;

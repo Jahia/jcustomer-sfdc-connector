@@ -88,7 +88,13 @@
         "pollRunning": "Syncing...",
         "what": {
           "title":    "What to sync",
-          "subtitle": "Choose which jCustomer changes are pushed to Salesforce Leads (applies to both scheduled and manual runs)."
+          "subtitle": "Choose which jCustomer changes are pushed to Salesforce (applies to both scheduled and manual runs)."
+        },
+        "target": {
+          "label":   "Target Salesforce object",
+          "desc":    "Push profiles to this object only. Configure its field mapping in the Field Mapping tab.",
+          "lead":    "Lead",
+          "contact": "Contact"
         },
         "profileUpdate":  { "label": "Profile updates", "desc": "Push profiles whose properties changed since the last run. An email is required to match or create the Lead." },
         "formSubmission": { "label": "Form submissions", "desc": "Push profiles that submitted a form since the last run." },

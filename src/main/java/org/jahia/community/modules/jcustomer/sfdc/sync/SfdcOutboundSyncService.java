@@ -38,8 +38,6 @@ public class SfdcOutboundSyncService {
 
     private static final Logger logger = LoggerFactory.getLogger(SfdcOutboundSyncService.class);
 
-    // Salesforce objects the outbound sync can write to (each has its own mapping + id property).
-    private static final String[] OUTBOUND_OBJECTS = {"Lead", "Contact"};
     private static final String PROP_EMAIL = "email";
     // Fields Salesforce requires to CREATE each object (updates don't need them).
     private static final Map<String, String[]> REQUIRED_FOR_CREATE = Map.of(
@@ -150,9 +148,9 @@ public class SfdcOutboundSyncService {
     }
 
     /**
-     * Pushes an already-resolved jCustomer profile to every configured Salesforce object
-     * (Lead and/or Contact — whichever has an outbound mapping). Returns {@code true} if any new
-     * record was created.
+     * Pushes an already-resolved jCustomer profile to the single configured Salesforce target
+     * object ({@code outboundObject} = Lead OR Contact). Returns {@code true} if a new record was
+     * created.
      */
     @SuppressWarnings("unchecked")
     public boolean pushProfile(Map<String, Object> profile, String siteKey) throws Exception {
@@ -161,18 +159,15 @@ public class SfdcOutboundSyncService {
                 ? (Map<String, Object>) profile.get("properties") : new HashMap<>();
         String email = asString(props.get(PROP_EMAIL));
 
-        boolean created = false;
-        boolean anyMapping = false;
-        for (String object : OUTBOUND_OBJECTS) {
-            List<Map<String, String>> mapping = configService.loadOutboundMapping(object);
-            if (mapping.isEmpty()) continue; // object not configured for outbound
-            anyMapping = true;
-            created |= pushToObject(object, profile, props, profileId, email, mapping, siteKey);
+        String object = configService.loadOutboundTriggers().getOrDefault("outboundObject", "Lead");
+        if (!"Lead".equals(object) && !"Contact".equals(object)) object = "Lead";
+
+        List<Map<String, String>> mapping = configService.loadOutboundMapping(object);
+        if (mapping.isEmpty()) {
+            logger.warn("[SFDC-Outbound] No outbound mapping configured for target {} — nothing to push", object);
+            return false;
         }
-        if (!anyMapping) {
-            logger.warn("[SFDC-Outbound] No outbound mapping configured (Lead/Contact) — nothing to push");
-        }
-        return created;
+        return pushToObject(object, profile, props, profileId, email, mapping, siteKey);
     }
 
     /** Pushes the profile to one Salesforce object type. Returns {@code true} if a record was created. */

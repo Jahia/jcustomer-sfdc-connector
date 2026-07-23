@@ -90,6 +90,12 @@
           "title":    "Éléments à synchroniser",
           "subtitle": "Choisissez quelles modifications jCustomer sont envoyées vers Salesforce (s'applique aux exécutions planifiées et manuelles)."
         },
+        "target": {
+          "label":   "Objet Salesforce cible",
+          "desc":    "N'envoie les profils que vers cet objet. Configurez son mapping dans l'onglet Mapping des champs.",
+          "lead":    "Lead",
+          "contact": "Contact"
+        },
         "profileUpdate":  { "label": "Mises à jour de profil", "desc": "Envoie les profils dont les propriétés ont changé depuis la dernière exécution. Un email est requis pour retrouver ou créer le Lead." },
         "formSubmission": { "label": "Soumissions de formulaire", "desc": "Envoie les profils ayant soumis un formulaire depuis la dernière exécution." },
         "schedule": {

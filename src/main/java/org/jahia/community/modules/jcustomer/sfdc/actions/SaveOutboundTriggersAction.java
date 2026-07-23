@@ -38,7 +38,7 @@ public class SaveOutboundTriggersAction extends AbstractSfdcAdminAction {
         try {
             JSONObject json = new JSONObject(readBody(req));
             Map<String, String> values = new HashMap<>();
-            for (String key : new String[]{"enabled", "onProfileUpdate", "onFormSubmission", "reconcileEnabled", "reconcileCron"}) {
+            for (String key : new String[]{"enabled", "onProfileUpdate", "onFormSubmission", "outboundObject", "reconcileEnabled", "reconcileCron"}) {
                 if (json.has(key)) values.put(key, json.get(key).toString());
             }
             configService.saveOutboundTriggers(values);

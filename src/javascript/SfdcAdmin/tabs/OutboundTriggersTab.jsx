@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Loader, Separator, Switch, Typography } from '@jahia/moonstone';
+import { Button, Dropdown, Input, Loader, Separator, Switch, Typography } from '@jahia/moonstone';
 import { getOutboundTriggers, saveOutboundTriggers, triggerOutboundReconcile } from '../api';
 import classes from './MappingTab.module.css';
 
@@ -9,7 +9,7 @@ const isOn = v => v === true || v === 'true';
 
 export default function OutboundTriggersTab() {
     const { t } = useTranslation(NS);
-    const [cfg, setCfg] = useState({ onProfileUpdate: 'true', onFormSubmission: 'true', reconcileEnabled: 'false', reconcileCron: '0 0/15 * * * ?' });
+    const [cfg, setCfg] = useState({ onProfileUpdate: 'true', onFormSubmission: 'true', outboundObject: 'Lead', reconcileEnabled: 'false', reconcileCron: '0 0/15 * * * ?' });
     const [loading, setLoading] = useState(true);
     const [saving,  setSaving]  = useState(false);
     const [polling, setPolling] = useState(false);
@@ -34,6 +34,7 @@ export default function OutboundTriggersTab() {
             await saveOutboundTriggers({
                 onProfileUpdate:  isOn(cfg.onProfileUpdate),
                 onFormSubmission: isOn(cfg.onFormSubmission),
+                outboundObject:   cfg.outboundObject === 'Contact' ? 'Contact' : 'Lead',
                 reconcileEnabled: isOn(cfg.reconcileEnabled),
                 reconcileCron:    (cfg.reconcileCron || '0 0/15 * * * ?').trim()
             });
@@ -76,7 +77,19 @@ export default function OutboundTriggersTab() {
                 <Typography variant="subheading" weight="semiBold">{t(`${NS}:outbound.triggers.what.title`)}</Typography>
                 <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.what.subtitle`)}</Typography>
 
-                <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 16 }}>
+                <div style={{ marginTop: 16 }}>
+                    <Typography variant="caption" weight="semiBold">{t(`${NS}:outbound.triggers.target.label`)}</Typography>
+                    <Dropdown size="medium" style={{ maxWidth: 280 }}
+                        value={cfg.outboundObject === 'Contact' ? 'Contact' : 'Lead'}
+                        data={[
+                            { label: t(`${NS}:outbound.triggers.target.lead`), value: 'Lead' },
+                            { label: t(`${NS}:outbound.triggers.target.contact`), value: 'Contact' }
+                        ]}
+                        onChange={(e, item) => set('outboundObject', item?.value ?? 'Lead')} />
+                    <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.target.desc`)}</Typography>
+                </div>
+
+                <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 20 }}>
                     <Switch checked={isOn(cfg.onProfileUpdate)} onChange={e => set('onProfileUpdate', e.target.checked)} />
                     <div>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.profileUpdate.label`)}</Typography>
