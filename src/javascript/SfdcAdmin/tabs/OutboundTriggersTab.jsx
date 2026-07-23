@@ -62,7 +62,7 @@ export default function OutboundTriggersTab() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16, maxWidth: 640 }}>
                 <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <Switch checked={isOn(cfg.enabled)} onChange={(e, checked) => set('enabled', checked)} />
+                    <Switch checked={isOn(cfg.enabled)} onChange={e => set('enabled', e.target.checked)} />
                     <div>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.enabled.label`)}</Typography>
                         <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.enabled.desc`)}</Typography>
@@ -71,7 +71,7 @@ export default function OutboundTriggersTab() {
 
                 <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <Switch checked={isOn(cfg.onProfileUpdate)} isDisabled={!isOn(cfg.enabled)}
-                        onChange={(e, checked) => set('onProfileUpdate', checked)} />
+                        onChange={e => set('onProfileUpdate', e.target.checked)} />
                     <div>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.profileUpdate.label`)}</Typography>
                         <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.profileUpdate.desc`)}</Typography>
@@ -80,7 +80,7 @@ export default function OutboundTriggersTab() {
 
                 <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <Switch checked={isOn(cfg.onFormSubmission)} isDisabled={!isOn(cfg.enabled)}
-                        onChange={(e, checked) => set('onFormSubmission', checked)} />
+                        onChange={e => set('onFormSubmission', e.target.checked)} />
                     <div>
                         <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.formSubmission.label`)}</Typography>
                         <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.formSubmission.desc`)}</Typography>
