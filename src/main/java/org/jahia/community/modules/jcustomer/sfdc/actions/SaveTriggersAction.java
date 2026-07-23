@@ -28,7 +28,7 @@ import java.util.Map;
  * Body: { loginEnabled, schedulerEnabled, schedulerCron }
  */
 @Component(service = Action.class, immediate = true)
-public class SaveTriggersAction extends Action {
+public class SaveTriggersAction extends AbstractSfdcAdminAction {
 
     private static final Logger logger = LoggerFactory.getLogger(SaveTriggersAction.class);
 
@@ -37,7 +37,7 @@ public class SaveTriggersAction extends Action {
     @Override public String getName() { return "saveTriggers"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         try {

@@ -27,7 +27,7 @@ import java.util.Map;
  * Response: { "Contact": [...fields], "Account": [...fields] }
  */
 @Component(service = Action.class, immediate = true)
-public class GetSfdcFieldsAction extends Action {
+public class GetSfdcFieldsAction extends AbstractSfdcAdminAction {
 
     private static final Logger logger = LoggerFactory.getLogger(GetSfdcFieldsAction.class);
 
@@ -39,7 +39,7 @@ public class GetSfdcFieldsAction extends Action {
     @Override public String getName() { return "getSfdcFields"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         try {
@@ -78,5 +78,10 @@ public class GetSfdcFieldsAction extends Action {
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write(json);
         response.getWriter().flush();
+        // Commit the response now. The render pipeline calls resp.setStatus(ActionResult.getResultCode())
+        // after doExecute returns; since every action returns ActionResult.OK (200), that call would
+        // otherwise overwrite an error status set above (e.g. 500). Committing here makes the status set
+        // by this method authoritative — getWriter().flush() alone does not commit small responses.
+        response.flushBuffer();
     }
 }

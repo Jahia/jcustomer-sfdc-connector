@@ -35,36 +35,54 @@ import java.util.stream.Collectors;
  */
 @Component(service = Action.class, immediate = true,
     configurationPid = "org.jahia.community.jcustomer.sfdc")
-public class GetJcPropertiesAction extends Action {
+public class GetJcPropertiesAction extends AbstractSfdcAdminAction {
 
     private static final Logger logger = LoggerFactory.getLogger(GetJcPropertiesAction.class);
 
+    // Credentials are intentionally NOT defaulted here. Shipping working jCustomer credentials in
+    // source (the former "karaf"/"karaf" default) is a hardcoded-secret risk; they must be supplied
+    // per-environment via the org.jahia.community.jcustomer.sfdc OSGi config. When unset, the live
+    // property lookup is disabled and only the built-in fallback list is returned (fail-closed).
     @interface Config {
-        String jcustomer_url()      default "http://jcustomer_3:8181";
-        String jcustomer_username() default "karaf";
-        String jcustomer_password() default "karaf";
+        String jcustomer_url()      default "";
+        String jcustomer_username() default "";
+        String jcustomer_password() default "";
     }
 
     private String jcUrl;
-    private String jcAuth;
+    private String jcAuth;   // null when URL/credentials are not configured → live lookup disabled
 
     @Activate
     public void activate(Config config) {
-        this.jcUrl  = config.jcustomer_url().replaceAll("/+$", "");
-        this.jcAuth = Base64.getEncoder().encodeToString(
-            (config.jcustomer_username() + ":" + config.jcustomer_password()).getBytes(StandardCharsets.UTF_8));
+        this.jcUrl = config.jcustomer_url() == null ? "" : config.jcustomer_url().replaceAll("/+$", "");
+        String user = config.jcustomer_username();
+        String pass = config.jcustomer_password();
+        if (jcUrl.isBlank() || user == null || user.isBlank() || pass == null || pass.isBlank()) {
+            this.jcAuth = null;
+            logger.warn("[SFDC-Action] jCustomer URL/credentials not configured "
+                + "(org.jahia.community.jcustomer.sfdc) — live property listing disabled, using fallback list only");
+        } else {
+            this.jcAuth = Base64.getEncoder().encodeToString(
+                (user + ":" + pass).getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     @Override public String getName() { return "getJcProperties"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         JSONArray result = new JSONArray();
 
         // Always seed with well-known fallback properties first
         addFallback(result);
+
+        // Fail closed: no live lookup unless URL + credentials were configured (see @Activate).
+        if (jcAuth == null || jcUrl.isBlank()) {
+            GetSfdcFieldsAction.write(ctx.getResponse(), result.toString());
+            return ActionResult.OK;
+        }
 
         try {
             // Use HttpURLConnection — tolerates underscores in hostnames unlike java.net.http.HttpClient

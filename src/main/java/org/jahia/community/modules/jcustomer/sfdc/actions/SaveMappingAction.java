@@ -25,14 +25,14 @@ import java.util.Map;
  * Body (JSON): { "sfObject": "Contact", "mappings": [ { sfField, jcProperty, required? } ] }
  */
 @Component(service = Action.class, immediate = true)
-public class SaveMappingAction extends Action {
+public class SaveMappingAction extends AbstractSfdcAdminAction {
 
     private ConnectorConfigService configService;
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Override public String getName() { return "saveMapping"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         try {

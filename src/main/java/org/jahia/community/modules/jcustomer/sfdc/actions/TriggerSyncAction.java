@@ -22,14 +22,14 @@ import java.util.Map;
  * POST *.triggerSync.do → { status: "started" } (async)
  */
 @Component(service = Action.class, immediate = true)
-public class TriggerSyncAction extends Action {
+public class TriggerSyncAction extends AbstractSfdcAdminAction {
 
     private ConnectorConfigService configService;
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Override public String getName() { return "triggerSync"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
 

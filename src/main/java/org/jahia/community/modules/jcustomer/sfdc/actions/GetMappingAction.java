@@ -18,14 +18,14 @@ import java.util.Map;
 
 /** Returns current field mappings for Contact and Account. POST *.getMapping.do */
 @Component(service = Action.class, immediate = true)
-public class GetMappingAction extends Action {
+public class GetMappingAction extends AbstractSfdcAdminAction {
 
     private ConnectorConfigService configService;
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Override public String getName() { return "getMapping"; }
 
     @Override
-    public ActionResult doExecute(HttpServletRequest req, RenderContext ctx, Resource res,
+    protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         JSONObject response = new JSONObject();
