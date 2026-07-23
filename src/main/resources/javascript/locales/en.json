@@ -10,7 +10,9 @@
       "tab": {
         "connection": "Connection",
         "mapping":    "Field Mapping",
-        "sync":       "Synchronisation"
+        "sync":       "Synchronisation",
+        "inbound":    "SFDC → jCustomer",
+        "outbound":   "jCustomer → SFDC"
       }
     },
     "connection": {
@@ -68,6 +70,29 @@
       "running": "Running...",
       "started": "Sync started in background. Refresh in a few seconds to see the result.",
       "info":    "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file."
+    },
+    "outbound": {
+      "mapping": {
+        "title":    "Outbound Field Mapping",
+        "subtitle": "Map jCustomer profile properties to Salesforce Lead fields. Matched Leads are updated; unmatched profiles create a new Lead.",
+        "saved":    "Outbound Lead mapping saved",
+        "requiredHint": "Salesforce requires {{fields}} to create a Lead — map them, or only existing Leads will be updated (no new Leads created)."
+      },
+      "sync": {
+        "title":         "Push to Salesforce",
+        "subtitle":      "Push a jCustomer profile to a Salesforce Lead (matched by email; created if none exists). Event-based and scheduled pushes are configured separately.",
+        "emailLabel":    "Profile email",
+        "emailRequired": "Enter a profile email to push.",
+        "push":          "Push now",
+        "pushing":       "Pushing...",
+        "result":        "Push {{status}} for {{email}}",
+        "lastRun":       "Last outbound run",
+        "at":            "When",
+        "status":        "Status",
+        "created":       "Leads created",
+        "updated":       "Leads updated",
+        "errors":        "Errors"
+      }
     },
     "cron": {
       "every": "Every",

@@ -10,7 +10,9 @@
       "tab": {
         "connection": "Connexion",
         "mapping":    "Mapping des champs",
-        "sync":       "Synchronisation"
+        "sync":       "Synchronisation",
+        "inbound":    "SFDC → jCustomer",
+        "outbound":   "jCustomer → SFDC"
       }
     },
     "connection": {
@@ -68,6 +70,29 @@
       "running": "En cours...",
       "started": "Synchronisation lancée en arrière-plan. Actualisez dans quelques secondes pour voir le résultat.",
       "info":    "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi."
+    },
+    "outbound": {
+      "mapping": {
+        "title":    "Mapping des champs sortants",
+        "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead Salesforce. Les Leads correspondants sont mis à jour ; les profils sans correspondance créent un nouveau Lead.",
+        "saved":    "Mapping Lead sortant enregistré",
+        "requiredHint": "Salesforce exige {{fields}} pour créer un Lead — mappez-les, sinon seuls les Leads existants seront mis à jour (aucun nouveau Lead créé)."
+      },
+      "sync": {
+        "title":         "Envoyer vers Salesforce",
+        "subtitle":      "Envoyez un profil jCustomer vers un Lead Salesforce (correspondance par email ; créé s'il n'existe pas). Les envois événementiels et planifiés sont configurés séparément.",
+        "emailLabel":    "Email du profil",
+        "emailRequired": "Saisissez un email de profil à envoyer.",
+        "push":          "Envoyer",
+        "pushing":       "Envoi...",
+        "result":        "Envoi {{status}} pour {{email}}",
+        "lastRun":       "Dernier envoi sortant",
+        "at":            "Quand",
+        "status":        "Statut",
+        "created":       "Leads créés",
+        "updated":       "Leads mis à jour",
+        "errors":        "Erreurs"
+      }
     },
     "cron": {
       "every": "Chaque",

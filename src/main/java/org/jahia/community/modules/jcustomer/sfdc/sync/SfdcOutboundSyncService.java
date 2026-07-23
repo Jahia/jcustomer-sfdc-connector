@@ -1,0 +1,160 @@
+package org.jahia.community.modules.jcustomer.sfdc.sync;
+
+import org.jahia.community.modules.jcustomer.sfdc.client.SfdcApiClient;
+import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.community.modules.jcustomer.sfdc.jcustomer.JCustomerProfileService;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Outbound sync orchestration (jCustomer → Salesforce).
+ *
+ * <p>Pushes a jCustomer profile into a Salesforce <b>Lead</b>:
+ * <ol>
+ *   <li>Apply the outbound mapping (jCustomer property → Lead field).</li>
+ *   <li>Resolve the target Lead — by the {@code SFDC_LeadId} stored on the profile, else by email.</li>
+ *   <li><b>Update</b> the Lead if found, otherwise <b>create</b> one (create requires Salesforce's
+ *       mandatory {@code LastName} + {@code Company} — skipped with a warning if unavailable).</li>
+ *   <li>Write the resulting {@code SFDC_LeadId} back onto the profile so later pushes update the
+ *       same Lead instead of creating duplicates.</li>
+ * </ol>
+ *
+ * <p>Converted leads are excluded from matching (see {@link SfdcApiClient#findLeadIdByEmail}).
+ */
+@Component(service = SfdcOutboundSyncService.class, immediate = true)
+public class SfdcOutboundSyncService {
+
+    private static final Logger logger = LoggerFactory.getLogger(SfdcOutboundSyncService.class);
+
+    private static final String LEAD              = "Lead";
+    private static final String PROP_SFDC_LEAD_ID = "SFDC_LeadId";
+    private static final String PROP_EMAIL        = "email";
+
+    private SfdcApiClient           apiClient;
+    private ConnectorConfigService  configService;
+    private JCustomerProfileService profileService;
+
+    @Reference public void setApiClient(SfdcApiClient s)            { this.apiClient      = s; }
+    @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
+    @Reference public void setProfileService(JCustomerProfileService s) { this.profileService = s; }
+
+    /**
+     * Finds the jCustomer profile matching {@code email} and pushes it to Salesforce as a Lead.
+     * Returns {@code true} if a Lead was created or updated.
+     */
+    public boolean pushForEmail(String email, String siteKey) {
+        if (email == null || email.isBlank()) return false;
+        logger.info("[SFDC-Outbound] Push triggered for email={}", email);
+        try {
+            Map<String, Object> profile = profileService.findProfile(null, email, siteKey);
+            if (profile == null) {
+                logger.info("[SFDC-Outbound] No jCustomer profile for email={} — nothing to push", email);
+                configService.saveOutboundSyncState("no-profile", 0, 0, 0);
+                return false;
+            }
+            boolean created = pushProfile(profile, siteKey);
+            configService.saveOutboundSyncState("success", created ? 0 : 1, created ? 1 : 0, 0);
+            return true;
+        } catch (Exception e) {
+            logger.error("[SFDC-Outbound] Push failed for email={}: {}", email, e.getMessage());
+            configService.saveOutboundSyncState("error: " + e.getMessage(), 0, 0, 1);
+            return false;
+        }
+    }
+
+    /**
+     * Pushes an already-resolved jCustomer profile to a Salesforce Lead.
+     * Returns {@code true} if a new Lead was created, {@code false} if an existing one was updated.
+     */
+    @SuppressWarnings("unchecked")
+    public boolean pushProfile(Map<String, Object> profile, String siteKey) throws Exception {
+        String profileId = asString(profile.get("itemId"));
+        Map<String, Object> props = profile.get("properties") instanceof Map
+                ? (Map<String, Object>) profile.get("properties") : new HashMap<>();
+
+        List<Map<String, String>> mapping = configService.loadOutboundMapping(LEAD);
+        if (mapping.isEmpty()) {
+            logger.warn("[SFDC-Outbound] No outbound Lead mapping configured — nothing to push");
+            return false;
+        }
+
+        // Build the Lead field set from the mapping
+        Map<String, Object> leadFields = new HashMap<>();
+        for (Map<String, String> m : mapping) {
+            String jcProp  = m.get("jcProperty");
+            String sfField = m.get("sfField");
+            if (jcProp == null || sfField == null || jcProp.isBlank() || sfField.isBlank()) continue;
+            Object value = props.get(jcProp);
+            if (value != null) leadFields.put(sfField, toSfValue(value));
+        }
+        if (leadFields.isEmpty()) {
+            logger.info("[SFDC-Outbound] Profile {} has no mapped values to push", profileId);
+            return false;
+        }
+
+        String email = asString(props.get(PROP_EMAIL));
+
+        // Resolve the target Lead: stored id first, then email lookup
+        String leadId = asString(props.get(PROP_SFDC_LEAD_ID));
+        if (leadId == null || leadId.isBlank()) {
+            leadId = apiClient.findLeadIdByEmail(email);
+        }
+
+        boolean created = false;
+        if (leadId != null && !leadId.isBlank()) {
+            apiClient.updateSObject(LEAD, leadId, leadFields);
+            logger.info("[SFDC-Outbound] Updated Lead {} from profile {} ({} fields)", leadId, profileId, leadFields.size());
+        } else {
+            // Salesforce requires LastName + Company to create a Lead.
+            if (isBlank(leadFields.get("LastName")) || isBlank(leadFields.get("Company"))) {
+                logger.warn("[SFDC-Outbound] Cannot create Lead for email={} — Salesforce requires LastName and Company, "
+                        + "but they are not mapped/available; skipping (updates would still work).", email);
+                return false;
+            }
+            if (email != null && !email.isBlank() && !leadFields.containsKey("Email")) {
+                leadFields.put("Email", email);
+            }
+            leadId = apiClient.createSObject(LEAD, leadFields);
+            created = true;
+            logger.info("[SFDC-Outbound] Created Lead {} from profile {} ({} fields)", leadId, profileId, leadFields.size());
+        }
+
+        // Persist the Lead id back onto the profile for future idempotent pushes
+        if (leadId != null && !leadId.isBlank() && profileId != null
+                && !leadId.equals(asString(props.get(PROP_SFDC_LEAD_ID)))) {
+            profileService.updateProfile(profileId, Map.of(PROP_SFDC_LEAD_ID, leadId), siteKey);
+        }
+
+        return created;
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    /** Converts a jCustomer value to a Salesforce-ready value (multi-value → ';'-joined picklist). */
+    private static Object toSfValue(Object value) {
+        if (value instanceof List) {
+            StringBuilder sb = new StringBuilder();
+            for (Object o : (List<?>) value) {
+                if (o == null) continue;
+                if (sb.length() > 0) sb.append(';');
+                sb.append(o);
+            }
+            return sb.toString();
+        }
+        return value.toString();
+    }
+
+    private static String asString(Object o) {
+        return o == null ? null : o.toString();
+    }
+
+    private static boolean isBlank(Object o) {
+        return o == null || o.toString().isBlank();
+    }
+}

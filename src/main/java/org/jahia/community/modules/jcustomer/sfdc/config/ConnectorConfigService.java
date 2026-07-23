@@ -35,6 +35,10 @@ public class ConnectorConfigService {
     public static final String MAPPING_NODE = CONFIG_ROOT + "/mapping";
     public static final String STATE_NODE   = CONFIG_ROOT + "/syncState";
 
+    // Outbound (jCustomer → SFDC) — kept in a separate subtree from the inbound config.
+    public static final String OUTBOUND_MAPPING_NODE = CONFIG_ROOT + "/outbound/mapping";
+    public static final String OUTBOUND_STATE_NODE   = CONFIG_ROOT + "/outbound/syncState";
+
     // ── Connection ────────────────────────────────────────────────────────────
 
     public Map<String, String> loadConnection() {
@@ -72,12 +76,33 @@ public class ConnectorConfigService {
 
     // ── Mapping ───────────────────────────────────────────────────────────────
 
-    /** Returns mapping for a given SF object ("Contact" or "Account"). */
+    /** Returns the inbound (SFDC → jCustomer) mapping for a given SF object. */
     public List<Map<String, String>> loadMapping(String sfObject) {
+        return loadMappingAt(MAPPING_NODE, sfObject);
+    }
+
+    /** Replaces the full inbound mapping for a given SF object. */
+    public void saveMapping(String sfObject, List<Map<String, String>> mappings) throws Exception {
+        saveMappingAt(MAPPING_NODE, sfObject, mappings);
+    }
+
+    /** Returns the outbound (jCustomer → SFDC) mapping for a given SF object. */
+    public List<Map<String, String>> loadOutboundMapping(String sfObject) {
+        return loadMappingAt(OUTBOUND_MAPPING_NODE, sfObject);
+    }
+
+    /** Replaces the full outbound mapping for a given SF object. */
+    public void saveOutboundMapping(String sfObject, List<Map<String, String>> mappings) throws Exception {
+        saveMappingAt(OUTBOUND_MAPPING_NODE, sfObject, mappings);
+    }
+
+    // Shared mapping load/save — inbound and outbound differ only by base node.
+
+    private List<Map<String, String>> loadMappingAt(String baseNode, String sfObject) {
         List<Map<String, String>> result = new ArrayList<>();
         try {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                String path = MAPPING_NODE + "/" + sfObject;
+                String path = baseNode + "/" + sfObject;
                 if (!session.nodeExists(path)) return null;
                 JCRNodeWrapper folder = (JCRNodeWrapper) session.getNode(path);
                 NodeIterator it = folder.getNodes();
@@ -93,17 +118,14 @@ public class ConnectorConfigService {
                 return null;
             });
         } catch (Exception e) {
-            logger.error("[SFDC-Config] Failed to load mapping for {}", sfObject, e);
+            logger.error("[SFDC-Config] Failed to load mapping at {}/{}", baseNode, sfObject, e);
         }
         return result;
     }
 
-    /** Replaces the full mapping for a given SF object. */
-    public void saveMapping(String sfObject, List<Map<String, String>> mappings) throws Exception {
+    private void saveMappingAt(String baseNode, String sfObject, List<Map<String, String>> mappings) throws Exception {
         JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            JCRNodeWrapper root    = ensurePath(session, CONFIG_ROOT);
-            JCRNodeWrapper mapRoot = ensureChild(root, "mapping");
-            JCRNodeWrapper folder  = ensureChild(mapRoot, sfObject);
+            JCRNodeWrapper folder = ensurePath(session, baseNode + "/" + sfObject);
 
             // Remove existing children
             NodeIterator it = folder.getNodes();
@@ -121,7 +143,43 @@ public class ConnectorConfigService {
             session.save();
             return null;
         });
-        logger.info("[SFDC-Config] Mapping saved for {} ({} entries)", sfObject, mappings.size());
+        logger.info("[SFDC-Config] Mapping saved at {}/{} ({} entries)", baseNode, sfObject, mappings.size());
+    }
+
+    // ── Outbound sync state ─────────────────────────────────────────────────────
+
+    public void saveOutboundSyncState(String status, long updated, long created, long errors) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                JCRNodeWrapper state = ensurePath(session, OUTBOUND_STATE_NODE);
+                state.setProperty("lastSyncAt",      java.time.Instant.now().toString());
+                state.setProperty("lastSyncStatus",  status);
+                state.setProperty("lastSyncUpdated", String.valueOf(updated));
+                state.setProperty("lastSyncCreated", String.valueOf(created));
+                state.setProperty("lastSyncErrors",  String.valueOf(errors));
+                session.save();
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Failed to save outbound sync state", e);
+        }
+    }
+
+    public Map<String, String> loadOutboundSyncState() {
+        Map<String, String> state = new HashMap<>();
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (!session.nodeExists(OUTBOUND_STATE_NODE)) return null;
+                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE);
+                for (String prop : new String[]{"lastSyncAt","lastSyncStatus","lastSyncUpdated","lastSyncCreated","lastSyncErrors"}) {
+                    if (node.hasProperty(prop)) state.put(prop, node.getProperty(prop).getString());
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Failed to load outbound sync state", e);
+        }
+        return state;
     }
 
     // ── Sync state ────────────────────────────────────────────────────────────
