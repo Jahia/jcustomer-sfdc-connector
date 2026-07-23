@@ -37,3 +37,12 @@ export const triggerSync         = (siteKey)      => post('triggerSync', null);
 export const getSyncState        = ()             => post('getSyncState');
 export const getTriggers         = ()             => post('getTriggers');
 export const saveTriggers        = body           => post('saveTriggers', body);
+
+// Outbound (jCustomer → SFDC)
+export const getOutboundMapping   = ()            => post('getOutboundMapping');
+export const saveOutboundMapping  = body          => post('saveOutboundMapping', body);
+export const triggerOutboundSync  = body          => post('triggerOutboundSync', body);
+export const getOutboundSyncState = ()            => post('getOutboundSyncState');
+export const getOutboundTriggers      = ()        => post('getOutboundTriggers');
+export const saveOutboundTriggers     = body      => post('saveOutboundTriggers', body);
+export const triggerOutboundReconcile = ()        => post('triggerOutboundReconcile', {});

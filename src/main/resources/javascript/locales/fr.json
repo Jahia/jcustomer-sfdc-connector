@@ -3,14 +3,17 @@
     "admin": {
       "accordion": { "label": "Connecteur SF" },
       "panel": {
-        "label": "Sync Salesforce → jCustomer",
-        "title": "Connecteur Salesforce → jCustomer",
-        "subtitle": "Synchronise les données Contact et Account de Salesforce vers les propriétés de profil jCustomer."
+        "label": "Sync Salesforce ⇄ jCustomer",
+        "title": "Connecteur Salesforce ⇄ jCustomer",
+        "subtitle": "Synchronise les données Contact, Account et Lead de Salesforce vers les propriétés de profil jCustomer."
       },
       "tab": {
         "connection": "Connexion",
         "mapping":    "Mapping des champs",
-        "sync":       "Synchronisation"
+        "sync":       "Synchronisation",
+        "triggers":   "Déclencheurs",
+        "inbound":    "SFDC → jCustomer",
+        "outbound":   "jCustomer → SFDC"
       }
     },
     "connection": {
@@ -25,7 +28,7 @@
     },
     "mapping": {
       "title":          "Mapping des champs",
-      "subtitle":       "Mappez les champs Contact et Account Salesforce vers les propriétés de profil jCustomer. L'email (→ email) est requis pour la correspondance des profils.",
+      "subtitle":       "Mappez les champs Contact, Account et Lead Salesforce vers les propriétés de profil jCustomer. L'email (→ email) est requis pour la correspondance des profils.",
       "col": {
         "sfField":    "Champ Salesforce",
         "jcProperty": "Propriété jCustomer"
@@ -68,6 +71,49 @@
       "running": "En cours...",
       "started": "Synchronisation lancée en arrière-plan. Actualisez dans quelques secondes pour voir le résultat.",
       "info":    "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi."
+    },
+    "outbound": {
+      "mapping": {
+        "title":    "Mapping des champs sortants",
+        "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead et Contact Salesforce. Les enregistrements correspondants sont mis à jour ; les profils sans correspondance en créent un nouveau.",
+        "saved":    "Mapping {{obj}} sortant enregistré",
+        "requiredHint": "Salesforce exige {{fields}} pour créer un {{obj}} — mappez-les, sinon seuls les {{obj}} existants seront mis à jour."
+      },
+      "triggers": {
+        "title":    "Synchronisation vers Salesforce",
+        "subtitle": "Le connecteur interroge jCustomer pour détecter les profils modifiés et les envoie vers Salesforce en tant que Leads.",
+        "saved":    "Configuration de synchronisation sortante enregistrée",
+        "pollStarted": "Synchronisation lancée en arrière-plan — consultez le dernier envoi sortant pour le résultat.",
+        "pollNow":     "Synchroniser maintenant",
+        "pollRunning": "Synchronisation...",
+        "what": {
+          "title":    "Éléments à synchroniser",
+          "subtitle": "Choisissez quelles modifications jCustomer sont envoyées vers Salesforce (s'applique aux exécutions planifiées et manuelles)."
+        },
+        "profileUpdate":  { "label": "Mises à jour de profil", "desc": "Envoie les profils dont les propriétés ont changé depuis la dernière exécution. Un email est requis pour retrouver ou créer le Lead." },
+        "formSubmission": { "label": "Soumissions de formulaire", "desc": "Envoie les profils ayant soumis un formulaire depuis la dernière exécution." },
+        "schedule": {
+          "title":    "Planification",
+          "subtitle": "Exécute la synchronisation automatiquement selon un planning cron. Vous pouvez aussi la lancer à la demande avec « Synchroniser maintenant ».",
+          "enabled":  { "label": "Activer la synchronisation planifiée", "desc": "Interroge jCustomer périodiquement et envoie les profils modifiés vers Salesforce." },
+          "cron":     "Expression cron"
+        }
+      },
+      "sync": {
+        "title":         "Envoyer vers Salesforce",
+        "subtitle":      "Envoyez un profil jCustomer vers un Lead Salesforce (correspondance par email ; créé s'il n'existe pas). Les envois événementiels et planifiés sont configurés séparément.",
+        "emailLabel":    "Email du profil",
+        "emailRequired": "Saisissez un email de profil à envoyer.",
+        "push":          "Envoyer",
+        "pushing":       "Envoi...",
+        "result":        "Envoi {{status}} pour {{email}}",
+        "lastRun":       "Dernier envoi sortant",
+        "at":            "Quand",
+        "status":        "Statut",
+        "created":       "Leads créés",
+        "updated":       "Leads mis à jour",
+        "errors":        "Erreurs"
+      }
     },
     "cron": {
       "every": "Chaque",

@@ -105,6 +105,116 @@ public class JCustomerProfileService {
         logger.debug("[JC-Profile] Updated profile {} — {} properties", profileId, properties.size());
     }
 
+    /**
+     * Returns profiles whose {@code systemProperties.lastUpdated} is at or after {@code isoCutoff}
+     * and that carry an email — used by the outbound reconcile job to catch profile changes that
+     * did not emit a Unomi event (e.g. console/REST edits). Newest first.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> searchProfilesModifiedSince(String isoCutoff, String siteKey, int limit) throws Exception {
+        if (contextServerService == null || !contextServerService.isAvailable(siteKey)) {
+            throw new IllegalStateException("[JC-Profile] ContextServerService not available for site " + siteKey);
+        }
+        Map<String, Object> dateParams = new HashMap<>();
+        dateParams.put("propertyName", "systemProperties.lastUpdated");
+        dateParams.put("comparisonOperator", "greaterThan");
+        dateParams.put("propertyValueDate", isoCutoff);
+
+        Map<String, Object> emailParams = new HashMap<>();
+        emailParams.put("propertyName", "properties.email");
+        emailParams.put("comparisonOperator", "exists");
+
+        // Evict the technical healthCheck profile (pattern from Jahia's Workato Unomi connector).
+        Map<String, Object> notHealthCheck = new HashMap<>();
+        notHealthCheck.put("propertyName", "itemId");
+        notHealthCheck.put("comparisonOperator", "notEquals");
+        notHealthCheck.put("propertyValue", "healthCheck");
+
+        Map<String, Object> boolParams = new HashMap<>();
+        boolParams.put("operator", "and");
+        boolParams.put("subConditions", List.of(
+                condition("profilePropertyCondition", dateParams),
+                condition("profilePropertyCondition", emailParams),
+                condition("profilePropertyCondition", notHealthCheck)));
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("condition", condition("booleanCondition", boolParams));
+        searchRequest.put("offset", 0);
+        searchRequest.put("limit", limit);
+        searchRequest.put("sortby", "systemProperties.lastUpdated");
+
+        Map<String, Object> result = contextServerService.executePostRequest(
+                siteKey, "/cxs/profiles/search", searchRequest, null, null, Map.class);
+        if (result == null) return List.of();
+        List<Map<String, Object>> list = (List<Map<String, Object>>) result.get("list");
+        return list != null ? list : List.of();
+    }
+
+    /**
+     * Returns {@code form} events since {@code isoCutoff} (oldest first). Each event carries a
+     * {@code profileId} — the reconcile loads that profile and pushes it. Pattern from Jahia's
+     * Workato Unomi connector ({@code /cxs/events/search}).
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> searchFormEventsSince(String isoCutoff, String siteKey, int limit) throws Exception {
+        if (contextServerService == null || !contextServerService.isAvailable(siteKey)) {
+            throw new IllegalStateException("[JC-Profile] ContextServerService not available for site " + siteKey);
+        }
+        Map<String, Object> typeParams = new HashMap<>();
+        typeParams.put("eventTypeId", "form");
+
+        Map<String, Object> tsParams = new HashMap<>();
+        tsParams.put("propertyName", "timeStamp");
+        tsParams.put("comparisonOperator", "greaterThan");
+        tsParams.put("propertyValueDate", isoCutoff);
+
+        Map<String, Object> boolParams = new HashMap<>();
+        boolParams.put("operator", "and");
+        boolParams.put("subConditions", List.of(
+                condition("eventTypeCondition", typeParams),
+                condition("eventPropertyCondition", tsParams)));
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("condition", condition("booleanCondition", boolParams));
+        searchRequest.put("offset", 0);
+        searchRequest.put("limit", limit);
+        searchRequest.put("sortby", "timeStamp");
+
+        Map<String, Object> result = contextServerService.executePostRequest(
+                siteKey, "/cxs/events/search", searchRequest, null, null, Map.class);
+        if (result == null) return List.of();
+        List<Map<String, Object>> list = (List<Map<String, Object>>) result.get("list");
+        return list != null ? list : List.of();
+    }
+
+    /** Loads a single profile by its jCustomer itemId (via search), or {@code null} if not found. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getProfileById(String profileId, String siteKey) throws Exception {
+        if (profileId == null || profileId.isBlank()) return null;
+        Map<String, Object> idParams = new HashMap<>();
+        idParams.put("propertyName", "itemId");
+        idParams.put("comparisonOperator", "equals");
+        idParams.put("propertyValue", profileId);
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("condition", condition("profilePropertyCondition", idParams));
+        searchRequest.put("offset", 0);
+        searchRequest.put("limit", 1);
+
+        Map<String, Object> result = contextServerService.executePostRequest(
+                siteKey, "/cxs/profiles/search", searchRequest, null, null, Map.class);
+        if (result == null) return null;
+        List<Map<String, Object>> list = (List<Map<String, Object>>) result.get("list");
+        return (list != null && !list.isEmpty()) ? list.get(0) : null;
+    }
+
+    private static Map<String, Object> condition(String type, Map<String, Object> parameterValues) {
+        Map<String, Object> c = new HashMap<>();
+        c.put("type", type);
+        c.put("parameterValues", parameterValues);
+        return c;
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")

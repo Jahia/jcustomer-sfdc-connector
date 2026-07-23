@@ -51,28 +51,49 @@ public class SfdcSyncService {
             // Load mappings
             List<Map<String, String>> contactMappings = configService.loadMapping("Contact");
             List<Map<String, String>> accountMappings = configService.loadMapping("Account");
+            List<Map<String, String>> leadMappings    = configService.loadMapping("Lead");
 
-            if (contactMappings.isEmpty()) {
-                logger.warn("[SFDC-Sync] No Contact mappings configured — nothing to sync");
+            if (contactMappings.isEmpty() && leadMappings.isEmpty()) {
+                logger.warn("[SFDC-Sync] No Contact or Lead mappings configured — nothing to sync");
                 configService.saveSyncState("skipped-no-mapping", 0, 0);
                 return;
             }
 
-            // Build and execute SOQL
-            String soql = buildSoql(contactMappings, accountMappings, deltaBufferMinutes);
-            logger.info("[SFDC-Sync] Executing SOQL: {}", soql);
+            // ── Contact sync (Contact + related Account fields) ──
+            if (!contactMappings.isEmpty()) {
+                String soql = buildSoql(contactMappings, accountMappings, deltaBufferMinutes);
+                logger.info("[SFDC-Sync] Executing Contact SOQL: {}", soql);
 
-            List<Map<String, Object>> contacts = apiClient.query(soql);
-            logger.info("[SFDC-Sync] SF returned {} contact record(s)", contacts.size());
+                List<Map<String, Object>> contacts = apiClient.query(soql);
+                logger.info("[SFDC-Sync] SF returned {} contact record(s)", contacts.size());
 
-            // Process each contact
-            for (Map<String, Object> contact : contacts) {
-                try {
-                    boolean processed = processContact(contact, contactMappings, accountMappings, siteKey);
-                    if (processed) updated++; else skipped++;
-                } catch (Exception e) {
-                    errors++;
-                    logger.error("[SFDC-Sync] Error processing contact {}: {}", contact.get("Id"), e.getMessage());
+                for (Map<String, Object> contact : contacts) {
+                    try {
+                        boolean processed = processContact(contact, contactMappings, accountMappings, siteKey);
+                        if (processed) updated++; else skipped++;
+                    } catch (Exception e) {
+                        errors++;
+                        logger.error("[SFDC-Sync] Error processing contact {}: {}", contact.get("Id"), e.getMessage());
+                    }
+                }
+            }
+
+            // ── Lead sync (top-level object, matched to profiles by email) ──
+            if (!leadMappings.isEmpty()) {
+                String leadSoql = buildLeadSoql(leadMappings, deltaBufferMinutes);
+                logger.info("[SFDC-Sync] Executing Lead SOQL: {}", leadSoql);
+
+                List<Map<String, Object>> leads = apiClient.query(leadSoql);
+                logger.info("[SFDC-Sync] SF returned {} lead record(s)", leads.size());
+
+                for (Map<String, Object> lead : leads) {
+                    try {
+                        boolean processed = processLead(lead, leadMappings, siteKey);
+                        if (processed) updated++; else skipped++;
+                    } catch (Exception e) {
+                        errors++;
+                        logger.error("[SFDC-Sync] Error processing lead {}: {}", lead.get("Id"), e.getMessage());
+                    }
                 }
             }
 
@@ -94,22 +115,41 @@ public class SfdcSyncService {
         try {
             List<Map<String, String>> contactMappings = configService.loadMapping("Contact");
             List<Map<String, String>> accountMappings = configService.loadMapping("Account");
+            List<Map<String, String>> leadMappings    = configService.loadMapping("Lead");
 
-            if (contactMappings.isEmpty()) return;
+            if (contactMappings.isEmpty() && leadMappings.isEmpty()) return;
 
-            // Query only this contact — escape the email before interpolating it into the SOQL
-            // string literal (SOQL injection guard; the email originates from a login event).
-            String soql = buildSoql(contactMappings, accountMappings, 0) +
-                " AND Email = '" + soqlEscape(email) + "'";
+            String escapedEmail = soqlEscape(email);
+            boolean matched = false;
 
-            List<Map<String, Object>> contacts = apiClient.query(soql);
-            if (contacts.isEmpty()) {
-                logger.debug("[SFDC-Sync] No SF contact found for email={}", email);
-                return;
+            // Contact first (a converted lead is a Contact) — escape the email before interpolating
+            // it into the SOQL string literal (SOQL injection guard; email comes from a login event).
+            if (!contactMappings.isEmpty()) {
+                String soql = buildSoql(contactMappings, accountMappings, 0) +
+                    " AND Email = '" + escapedEmail + "'";
+                List<Map<String, Object>> contacts = apiClient.query(soql);
+                if (!contacts.isEmpty()) {
+                    processContact(contacts.get(0), contactMappings, accountMappings, siteKey);
+                    matched = true;
+                }
             }
 
-            processContact(contacts.get(0), contactMappings, accountMappings, siteKey);
-            logger.info("[SFDC-Sync] Login sync complete for email={}", email);
+            // Fall back to Lead (a not-yet-converted prospect)
+            if (!leadMappings.isEmpty()) {
+                String leadSoql = buildLeadSoql(leadMappings, 0) +
+                    " AND Email = '" + escapedEmail + "'";
+                List<Map<String, Object>> leads = apiClient.query(leadSoql);
+                if (!leads.isEmpty()) {
+                    processLead(leads.get(0), leadMappings, siteKey);
+                    matched = true;
+                }
+            }
+
+            if (matched) {
+                logger.info("[SFDC-Sync] Login sync complete for email={}", email);
+            } else {
+                logger.debug("[SFDC-Sync] No SF contact or lead found for email={}", email);
+            }
 
         } catch (Exception e) {
             logger.error("[SFDC-Sync] Login sync failed for email={}: {}", email, e.getMessage());
@@ -150,6 +190,37 @@ public class SfdcSyncService {
         sb.append(" FROM Contact WHERE Email != null");
 
         // Delta filter
+        if (deltaBufferMinutes > 0) {
+            String lastSync = configService.getLastSyncAt();
+            if (lastSync != null) {
+                Instant cutoff = Instant.parse(lastSync).minus(deltaBufferMinutes, ChronoUnit.MINUTES);
+                sb.append(" AND LastModifiedDate >= ").append(cutoff.toString());
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Builds the SOQL for the Lead object. Leads are a top-level object matched to jCustomer
+     * profiles by email; converted leads are excluded (they already exist as Contacts).
+     */
+    private String buildLeadSoql(List<Map<String, String>> leadMappings, int deltaBufferMinutes) {
+        java.util.Set<String> added = new java.util.LinkedHashSet<>();
+        added.add("Id");
+        added.add("Email");
+
+        for (Map<String, String> m : leadMappings) {
+            String sfField = m.get("sfField");
+            if (sfField != null && !sfField.isBlank()) {
+                added.add(sfField);
+            }
+        }
+
+        StringBuilder sb = new StringBuilder("SELECT ");
+        sb.append(String.join(", ", added));
+        sb.append(" FROM Lead WHERE IsConverted = false AND Email != null");
+
         if (deltaBufferMinutes > 0) {
             String lastSync = configService.getLastSyncAt();
             if (lastSync != null) {
@@ -219,6 +290,47 @@ public class SfdcSyncService {
 
         profileService.updateProfile(profileId, properties, siteKey);
         logger.debug("[SFDC-Sync] Updated profile {} ({}) — {} properties", profileId, email, properties.size());
+        return true;
+    }
+
+    /**
+     * Processes a single Lead: matches the jCustomer profile by email and applies the Lead field
+     * mapping. Unlike Contact, a Lead has no Account relationship and carries no stored ContactId,
+     * so matching is by email only.
+     */
+    private boolean processLead(Map<String, Object> lead,
+                                 List<Map<String, String>> leadMappings,
+                                 String siteKey) throws Exception {
+
+        String email = str(lead, "Email");
+        if (email == null || email.isBlank()) {
+            return false;
+        }
+
+        Map<String, Object> profile = profileService.findProfile(null, email, siteKey);
+        if (profile == null) {
+            logger.debug("[SFDC-Sync] No jCustomer profile for lead email={} — skipping", email);
+            return false;
+        }
+
+        String profileId = (String) profile.get("itemId");
+
+        Map<String, Object> properties = new HashMap<>();
+        for (Map<String, String> m : leadMappings) {
+            String sfField = m.get("sfField");
+            String jcProp  = m.get("jcProperty");
+            if (sfField == null || jcProp == null) continue;
+            Object value = lead.get(sfField);
+            if (value != null) properties.put(jcProp, toJcValue(value));
+        }
+
+        if (properties.isEmpty()) {
+            logger.debug("[SFDC-Sync] No properties to update for lead profile {}", profileId);
+            return false;
+        }
+
+        profileService.updateProfile(profileId, properties, siteKey);
+        logger.debug("[SFDC-Sync] Updated profile {} from lead ({}) — {} properties", profileId, email, properties.size());
         return true;
     }
 

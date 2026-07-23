@@ -3,14 +3,17 @@
     "admin": {
       "accordion": { "label": "SF Connector" },
       "panel": {
-        "label": "Salesforce → jCustomer Sync",
-        "title": "Salesforce - jCustomer Connector",
-        "subtitle": "Sync Contact and Account data from Salesforce into jCustomer profile properties."
+        "label": "Salesforce ⇄ jCustomer Sync",
+        "title": "Salesforce ⇄ jCustomer Connector",
+        "subtitle": "Sync Contact, Account and Lead data from Salesforce into jCustomer profile properties."
       },
       "tab": {
         "connection": "Connection",
         "mapping":    "Field Mapping",
-        "sync":       "Synchronisation"
+        "sync":       "Synchronisation",
+        "triggers":   "Event Triggers",
+        "inbound":    "SFDC → jCustomer",
+        "outbound":   "jCustomer → SFDC"
       }
     },
     "connection": {
@@ -25,7 +28,7 @@
     },
     "mapping": {
       "title":          "Field Mapping",
-      "subtitle":       "Map Salesforce Contact and Account fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
+      "subtitle":       "Map Salesforce Contact, Account and Lead fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
       "col": {
         "sfField":    "Salesforce Field",
         "jcProperty": "jCustomer Property"
@@ -68,6 +71,49 @@
       "running": "Running...",
       "started": "Sync started in background. Refresh in a few seconds to see the result.",
       "info":    "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file."
+    },
+    "outbound": {
+      "mapping": {
+        "title":    "Outbound Field Mapping",
+        "subtitle": "Map jCustomer profile properties to Salesforce Lead and Contact fields. Matched records are updated; unmatched profiles create a new one.",
+        "saved":    "Outbound {{obj}} mapping saved",
+        "requiredHint": "Salesforce requires {{fields}} to create a {{obj}} — map them, or only existing {{obj}} records will be updated."
+      },
+      "triggers": {
+        "title":    "Sync to Salesforce",
+        "subtitle": "The connector polls jCustomer for changed profiles and pushes them to Salesforce as Leads.",
+        "saved":    "Outbound sync configuration saved",
+        "pollStarted": "Sync started in the background — check the last outbound run for results.",
+        "pollNow":     "Sync now",
+        "pollRunning": "Syncing...",
+        "what": {
+          "title":    "What to sync",
+          "subtitle": "Choose which jCustomer changes are pushed to Salesforce Leads (applies to both scheduled and manual runs)."
+        },
+        "profileUpdate":  { "label": "Profile updates", "desc": "Push profiles whose properties changed since the last run. An email is required to match or create the Lead." },
+        "formSubmission": { "label": "Form submissions", "desc": "Push profiles that submitted a form since the last run." },
+        "schedule": {
+          "title":    "Schedule",
+          "subtitle": "Run the sync automatically on a cron schedule. You can also run it on demand with \"Sync now\".",
+          "enabled":  { "label": "Enable scheduled sync", "desc": "Poll jCustomer periodically and push changed profiles to Salesforce." },
+          "cron":     "Cron expression"
+        }
+      },
+      "sync": {
+        "title":         "Push to Salesforce",
+        "subtitle":      "Push a jCustomer profile to a Salesforce Lead (matched by email; created if none exists). Event-based and scheduled pushes are configured separately.",
+        "emailLabel":    "Profile email",
+        "emailRequired": "Enter a profile email to push.",
+        "push":          "Push now",
+        "pushing":       "Pushing...",
+        "result":        "Push {{status}} for {{email}}",
+        "lastRun":       "Last outbound run",
+        "at":            "When",
+        "status":        "Status",
+        "created":       "Leads created",
+        "updated":       "Leads updated",
+        "errors":        "Errors"
+      }
     },
     "cron": {
       "every": "Every",

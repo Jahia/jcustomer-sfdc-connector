@@ -29,8 +29,9 @@ public class GetMappingAction extends AbstractSfdcAdminAction {
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
         JSONObject response = new JSONObject();
-        response.put("Contact", toJson(configService.loadMapping("Contact")));
-        response.put("Account", toJson(configService.loadMapping("Account")));
+        for (String sfObject : GetSfdcFieldsAction.SFDC_OBJECTS) {
+            response.put(sfObject, toJson(configService.loadMapping(sfObject)));
+        }
         GetSfdcFieldsAction.write(ctx.getResponse(), response.toString());
         return ActionResult.OK;
     }

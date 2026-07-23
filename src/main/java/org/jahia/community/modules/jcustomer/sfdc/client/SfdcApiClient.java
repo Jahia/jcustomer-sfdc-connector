@@ -125,6 +125,52 @@ public class SfdcApiClient {
         return instanceUrl;
     }
 
+    // ── Writes (jCustomer → SFDC) ───────────────────────────────────────────────
+
+    /**
+     * Returns the Id of the most recently modified record of {@code type} (e.g. "Lead" or
+     * "Contact") with the given email, or {@code null} if none. For Lead, converted leads are
+     * excluded. The email is escaped for the SOQL string literal.
+     */
+    public String findSObjectIdByEmail(String type, String email) throws Exception {
+        if (email == null || email.isBlank()) return null;
+        String escaped = email.replace("\\", "\\\\").replace("'", "\\'");
+        String where = "Email = '" + escaped + "'";
+        if ("Lead".equals(type)) where += " AND IsConverted = false";
+        String soql = "SELECT Id FROM " + type + " WHERE " + where + " ORDER BY LastModifiedDate DESC LIMIT 1";
+        List<Map<String, Object>> rows = query(soql);
+        if (rows.isEmpty()) return null;
+        Object id = rows.get(0).get("Id");
+        return id == null ? null : id.toString();
+    }
+
+    /**
+     * Creates an sObject of the given type and returns the new record Id.
+     * POST /services/data/{v}/sobjects/{type}
+     */
+    public String createSObject(String type, Map<String, Object> fields) throws Exception {
+        String url = dataBaseUrl() + "/sobjects/" + type;
+        HttpResponse<String> resp = writeJson("POST", url, new org.json.JSONObject(fields).toString());
+        if (resp.statusCode() != 201 && resp.statusCode() != 200) {
+            throw new RuntimeException("[SFDC-Client] Create " + type + " failed HTTP "
+                    + resp.statusCode() + ": " + resp.body());
+        }
+        return new org.json.JSONObject(resp.body()).optString("id", null);
+    }
+
+    /**
+     * Updates fields on an existing sObject.
+     * PATCH /services/data/{v}/sobjects/{type}/{id} (Salesforce returns 204 No Content).
+     */
+    public void updateSObject(String type, String id, Map<String, Object> fields) throws Exception {
+        String url = dataBaseUrl() + "/sobjects/" + type + "/" + id;
+        HttpResponse<String> resp = writeJson("PATCH", url, new org.json.JSONObject(fields).toString());
+        if (resp.statusCode() != 204 && resp.statusCode() != 200) {
+            throw new RuntimeException("[SFDC-Client] Update " + type + "/" + id + " failed HTTP "
+                    + resp.statusCode() + ": " + resp.body());
+        }
+    }
+
     // ── HTTP helpers ──────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
@@ -155,6 +201,39 @@ public class SfdcApiClient {
             .timeout(Duration.ofSeconds(30))
             .build();
         return HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** POST/PATCH JSON with the bearer token, retrying once on 401 with a refreshed token. */
+    private HttpResponse<String> writeJson(String method, String url, String jsonBody) throws Exception {
+        String token = authService.getAccessToken();
+        HttpResponse<String> resp = doSend(method, url, token, jsonBody);
+        if (resp.statusCode() == 401) {
+            authService.invalidateToken();
+            token = authService.getAccessToken();
+            resp = doSend(method, url, token, jsonBody);
+        }
+        return resp;
+    }
+
+    private HttpResponse<String> doSend(String method, String url, String token, String jsonBody) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + token)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .method(method, HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+            .timeout(Duration.ofSeconds(30))
+            .build();
+        return HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** {instanceUrl without trailing slash}/services/data/{apiVersion} */
+    private String dataBaseUrl() {
+        Map<String, String> cfg = configService.loadConnection();
+        String instanceUrl = cfg.get("instanceUrl");
+        if (instanceUrl != null) instanceUrl = instanceUrl.replaceAll("/+$", "");
+        String apiVersion = cfg.getOrDefault("apiVersion", "v66.0");
+        return instanceUrl + "/services/data/" + apiVersion;
     }
 
     // ── Minimal JSON parser ───────────────────────────────────────────────────
