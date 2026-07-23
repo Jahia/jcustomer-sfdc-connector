@@ -3,14 +3,15 @@
     "admin": {
       "accordion": { "label": "Connecteur SF" },
       "panel": {
-        "label": "Sync Salesforce → jCustomer",
-        "title": "Connecteur Salesforce → jCustomer",
+        "label": "Sync Salesforce ⇄ jCustomer",
+        "title": "Connecteur Salesforce ⇄ jCustomer",
         "subtitle": "Synchronise les données Contact, Account et Lead de Salesforce vers les propriétés de profil jCustomer."
       },
       "tab": {
         "connection": "Connexion",
         "mapping":    "Mapping des champs",
         "sync":       "Synchronisation",
+        "triggers":   "Déclencheurs",
         "inbound":    "SFDC → jCustomer",
         "outbound":   "jCustomer → SFDC"
       }
@@ -77,6 +78,14 @@
         "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead Salesforce. Les Leads correspondants sont mis à jour ; les profils sans correspondance créent un nouveau Lead.",
         "saved":    "Mapping Lead sortant enregistré",
         "requiredHint": "Salesforce exige {{fields}} pour créer un Lead — mappez-les, sinon seuls les Leads existants seront mis à jour (aucun nouveau Lead créé)."
+      },
+      "triggers": {
+        "title":    "Déclencheurs événementiels",
+        "subtitle": "Choisissez quels événements jCustomer envoient un profil vers Salesforce en tant que Lead. Nécessite le webhook d'événements déployé sur jCustomer.",
+        "saved":    "Configuration des déclencheurs sortants enregistrée",
+        "enabled":        { "label": "Activer l'envoi événementiel", "desc": "Interrupteur principal. Désactivé, aucun événement jCustomer n'envoie vers Salesforce (l'envoi manuel et la réconciliation planifiée restent actifs)." },
+        "profileUpdate":  { "label": "À la mise à jour du profil", "desc": "Envoie lorsqu'un profil jCustomer est mis à jour. Le profil doit avoir un email (utilisé pour retrouver ou créer le Lead)." },
+        "formSubmission": { "label": "À la soumission d'un formulaire", "desc": "Envoie lorsqu'un visiteur soumet un formulaire suivi par jCustomer." }
       },
       "sync": {
         "title":         "Envoyer vers Salesforce",

@@ -2,11 +2,12 @@ import React, { useState, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader, Tab, TabItem } from '@jahia/moonstone';
 
-const OutboundMappingTab = lazy(() => import('./OutboundMappingTab'));
-const OutboundSyncTab    = lazy(() => import('./OutboundSyncTab'));
+const OutboundMappingTab  = lazy(() => import('./OutboundMappingTab'));
+const OutboundTriggersTab = lazy(() => import('./OutboundTriggersTab'));
+const OutboundSyncTab     = lazy(() => import('./OutboundSyncTab'));
 
 const NS = 'jcustomer-sfdc-connector';
-const SUB = ['mapping', 'sync'];
+const SUB = ['mapping', 'triggers', 'sync'];
 
 /** jCustomer → SFDC (outbound) — Lead field mapping + push/synchronisation. */
 export default function OutboundPanel() {
@@ -25,8 +26,9 @@ export default function OutboundPanel() {
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Loader size="big" /></div>}>
-                    {sub === 'mapping' && <OutboundMappingTab />}
-                    {sub === 'sync'    && <OutboundSyncTab />}
+                    {sub === 'mapping'  && <OutboundMappingTab />}
+                    {sub === 'triggers' && <OutboundTriggersTab />}
+                    {sub === 'sync'     && <OutboundSyncTab />}
                 </Suspense>
             </div>
         </div>

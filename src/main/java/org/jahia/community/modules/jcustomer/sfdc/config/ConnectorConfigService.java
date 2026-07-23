@@ -36,8 +36,9 @@ public class ConnectorConfigService {
     public static final String STATE_NODE   = CONFIG_ROOT + "/syncState";
 
     // Outbound (jCustomer → SFDC) — kept in a separate subtree from the inbound config.
-    public static final String OUTBOUND_MAPPING_NODE = CONFIG_ROOT + "/outbound/mapping";
-    public static final String OUTBOUND_STATE_NODE   = CONFIG_ROOT + "/outbound/syncState";
+    public static final String OUTBOUND_MAPPING_NODE  = CONFIG_ROOT + "/outbound/mapping";
+    public static final String OUTBOUND_STATE_NODE    = CONFIG_ROOT + "/outbound/syncState";
+    public static final String OUTBOUND_TRIGGERS_NODE = CONFIG_ROOT + "/outbound/triggers";
 
     // ── Connection ────────────────────────────────────────────────────────────
 
@@ -144,6 +145,41 @@ public class ConnectorConfigService {
             return null;
         });
         logger.info("[SFDC-Config] Mapping saved at {}/{} ({} entries)", baseNode, sfObject, mappings.size());
+    }
+
+    // ── Outbound triggers (which jCustomer events push to SFDC) ──────────────────
+
+    public Map<String, String> loadOutboundTriggers() {
+        Map<String, String> result = new HashMap<>();
+        // defaults: master off until the event webhook is deployed; both events pre-selected.
+        result.put("enabled",          "false");
+        result.put("onProfileUpdate",  "true");
+        result.put("onFormSubmission", "true");
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (!session.nodeExists(OUTBOUND_TRIGGERS_NODE)) return null;
+                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_TRIGGERS_NODE);
+                for (String prop : new String[]{"enabled","onProfileUpdate","onFormSubmission"}) {
+                    if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            logger.warn("[SFDC-Config] Could not load outbound triggers — using defaults: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    public void saveOutboundTriggers(Map<String, String> values) throws Exception {
+        JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+            JCRNodeWrapper triggers = ensurePath(session, OUTBOUND_TRIGGERS_NODE);
+            for (Map.Entry<String, String> e : values.entrySet()) {
+                triggers.setProperty(e.getKey(), e.getValue());
+            }
+            session.save();
+            return null;
+        });
+        logger.info("[SFDC-Config] Outbound triggers saved: {}", values);
     }
 
     // ── Outbound sync state ─────────────────────────────────────────────────────

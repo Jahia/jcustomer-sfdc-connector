@@ -3,14 +3,15 @@
     "admin": {
       "accordion": { "label": "SF Connector" },
       "panel": {
-        "label": "Salesforce → jCustomer Sync",
-        "title": "Salesforce - jCustomer Connector",
+        "label": "Salesforce ⇄ jCustomer Sync",
+        "title": "Salesforce ⇄ jCustomer Connector",
         "subtitle": "Sync Contact, Account and Lead data from Salesforce into jCustomer profile properties."
       },
       "tab": {
         "connection": "Connection",
         "mapping":    "Field Mapping",
         "sync":       "Synchronisation",
+        "triggers":   "Event Triggers",
         "inbound":    "SFDC → jCustomer",
         "outbound":   "jCustomer → SFDC"
       }
@@ -77,6 +78,14 @@
         "subtitle": "Map jCustomer profile properties to Salesforce Lead fields. Matched Leads are updated; unmatched profiles create a new Lead.",
         "saved":    "Outbound Lead mapping saved",
         "requiredHint": "Salesforce requires {{fields}} to create a Lead — map them, or only existing Leads will be updated (no new Leads created)."
+      },
+      "triggers": {
+        "title":    "Event Triggers",
+        "subtitle": "Choose which jCustomer events push a profile to Salesforce as a Lead. Requires the event webhook to be deployed to jCustomer.",
+        "saved":    "Outbound trigger configuration saved",
+        "enabled":        { "label": "Enable event-based push", "desc": "Master switch. When off, no jCustomer event pushes to Salesforce (manual push and scheduled reconcile still work)." },
+        "profileUpdate":  { "label": "On profile update", "desc": "Push when a jCustomer profile is updated. The profile must have an email (used to match or create the Lead)." },
+        "formSubmission": { "label": "On form submission", "desc": "Push when a visitor submits a form tracked by jCustomer." }
       },
       "sync": {
         "title":         "Push to Salesforce",
