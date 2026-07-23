@@ -126,7 +126,9 @@
       "on":    "on",
       "onDay": "on day",
       "at":    "at",
+      "minutesUnit": "minutes",
       "freq": {
+        "minutes": "Minutes",
         "hourly":  "Hour",
         "daily":   "Day",
         "weekly":  "Week",

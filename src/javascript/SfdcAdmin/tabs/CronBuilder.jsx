@@ -9,9 +9,10 @@ const NS = 'jcustomer-sfdc-connector';
 
 const HOURS         = Array.from({ length: 24 }, (_, i) => ({ label: String(i).padStart(2, '0') + 'h', value: String(i) }));
 const MINUTES       = [0, 15, 30, 45].map(m => ({ label: String(m).padStart(2, '0'), value: String(m) }));
+const MINUTE_STEPS  = [1, 5, 10, 15, 20, 30].map(n => ({ label: String(n), value: String(n) }));
 const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, i) => ({ label: String(i + 1), value: String(i + 1) }));
 
-const FREQ_KEYS = ['hourly', 'daily', 'weekly', 'monthly'];
+const FREQ_KEYS = ['minutes', 'hourly', 'daily', 'weekly', 'monthly'];
 const DAY_KEYS  = [
     { key: 'monday',    value: 'MON' },
     { key: 'tuesday',   value: 'TUE' },
@@ -23,10 +24,12 @@ const DAY_KEYS  = [
 ];
 
 /** Build a Quartz cron expression from the UI state. */
-const buildCron = ({ freq, hour, minute, day, dayOfMonth }) => {
+const buildCron = ({ freq, hour, minute, day, dayOfMonth, interval }) => {
     const h = hour   || '5';
     const m = minute || '0';
+    const n = interval || '5';
     switch (freq) {
+        case 'minutes': return `0 0/${n} * * * ?`;
         case 'hourly':  return `0 ${m} * * * ?`;
         case 'weekly':  return `0 ${m} ${h} ? * ${day || 'MON'}`;
         case 'monthly': return `0 ${m} ${h} ${dayOfMonth || '1'} * ?`;
@@ -35,18 +38,22 @@ const buildCron = ({ freq, hour, minute, day, dayOfMonth }) => {
     }
 };
 
+const DEFAULTS = { freq: 'daily', hour: '5', minute: '0', day: 'MON', dayOfMonth: '1', interval: '5' };
+
 /** Parse an existing Quartz cron into UI state (best-effort). */
 const parseCron = cron => {
-    if (!cron) return { freq: 'daily', hour: '5', minute: '0', day: 'MON', dayOfMonth: '1' };
+    if (!cron) return { ...DEFAULTS };
     const parts = cron.trim().split(/\s+/);
-    if (parts.length < 6) return { freq: 'daily', hour: '5', minute: '0', day: 'MON', dayOfMonth: '1' };
+    if (parts.length < 6) return { ...DEFAULTS };
 
     const [, minute, hour, dom, , dow] = parts;
+    const step = /^(?:0|\*)\/(\d+)$/.exec(minute);   // "0/5" / "*/5" → every N minutes
 
-    if (hour === '*') return { freq: 'hourly', hour: '0', minute: minute === '*' ? '0' : minute, day: 'MON', dayOfMonth: '1' };
-    if (dow !== '?' && dow !== '*') return { freq: 'weekly',  hour, minute, day: dow, dayOfMonth: '1' };
-    if (dom !== '?' && dom !== '*') return { freq: 'monthly', hour, minute, day: 'MON', dayOfMonth: dom };
-    return { freq: 'daily', hour, minute, day: 'MON', dayOfMonth: '1' };
+    if (hour === '*' && step)         return { ...DEFAULTS, freq: 'minutes', interval: step[1] };
+    if (hour === '*')                 return { ...DEFAULTS, freq: 'hourly', hour: '0', minute: minute === '*' ? '0' : minute };
+    if (dow !== '?' && dow !== '*')   return { ...DEFAULTS, freq: 'weekly',  hour, minute, day: dow };
+    if (dom !== '?' && dom !== '*')   return { ...DEFAULTS, freq: 'monthly', hour, minute, dayOfMonth: dom };
+    return { ...DEFAULTS, freq: 'daily', hour, minute };
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -82,6 +89,16 @@ export default function CronBuilder({ value, onChange }) {
                     onChange={(e, item) => update({ freq: pick(e, item) })}
                 />
 
+                {/* Minutes: every N minutes */}
+                {state.freq === 'minutes' && (
+                    <>
+                        <Dropdown size="small" value={state.interval}
+                            data={MINUTE_STEPS}
+                            onChange={(e, item) => update({ interval: pick(e, item) })} />
+                        <span className={classes.word}>{t(`${NS}:cron.minutesUnit`)}</span>
+                    </>
+                )}
+
                 {/* Hourly: at :MM */}
                 {state.freq === 'hourly' && (
                     <>
@@ -114,7 +131,7 @@ export default function CronBuilder({ value, onChange }) {
                 )}
 
                 {/* Daily/Weekly/Monthly: at HH:MM */}
-                {state.freq !== 'hourly' && (
+                {state.freq !== 'hourly' && state.freq !== 'minutes' && (
                     <>
                         <span className={classes.word}>{t(`${NS}:cron.at`)}</span>
                         <Dropdown size="small" value={state.hour}
