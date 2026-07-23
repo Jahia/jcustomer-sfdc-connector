@@ -8,6 +8,8 @@ import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +67,46 @@ public class SfdcOutboundSyncService {
             logger.error("[SFDC-Outbound] Push failed for email={}: {}", email, e.getMessage());
             configService.saveOutboundSyncState("error: " + e.getMessage(), 0, 0, 1);
             return false;
+        }
+    }
+
+    /**
+     * Reconcile sweep: pushes every jCustomer profile changed since the last run (with an email) to
+     * Salesforce. Catches profile edits that emit no Unomi event (console/REST/batch), which the
+     * event webhook cannot see. Idempotent — updates the Lead matched by the stored {@code
+     * SFDC_LeadId} / email, so re-processing a profile is a harmless no-op update.
+     *
+     * @param bufferMinutes clock-skew buffer subtracted from the last-run timestamp
+     * @param maxProfiles   safety cap on profiles processed per run
+     */
+    public void runReconcile(String siteKey, int bufferMinutes, int maxProfiles) {
+        long updated = 0, created = 0, errors = 0;
+        Instant runStart = Instant.now();
+        try {
+            String last = configService.getOutboundReconcileAt();
+            Instant cutoff = (last != null)
+                    ? Instant.parse(last).minus(bufferMinutes, ChronoUnit.MINUTES)
+                    : runStart.minus(24, ChronoUnit.HOURS); // first run: look back a day
+            logger.info("[SFDC-Outbound] Reconcile starting for site={} (changed since {})", siteKey, cutoff);
+
+            List<Map<String, Object>> profiles = profileService.searchProfilesModifiedSince(cutoff.toString(), siteKey, maxProfiles);
+            logger.info("[SFDC-Outbound] Reconcile: {} changed profile(s) to process", profiles.size());
+
+            for (Map<String, Object> profile : profiles) {
+                try {
+                    if (pushProfile(profile, siteKey)) created++; else updated++;
+                } catch (Exception e) {
+                    errors++;
+                    logger.error("[SFDC-Outbound] Reconcile error for profile {}: {}", profile.get("itemId"), e.getMessage());
+                }
+            }
+            // Advance the watermark to the run start so edits during/after the run are caught next time.
+            configService.setOutboundReconcileAt(runStart.toString());
+            configService.saveOutboundSyncState("reconcile: " + profiles.size() + " processed", updated, created, errors);
+            logger.info("[SFDC-Outbound] Reconcile complete — created={}, updated={}, errors={}", created, updated, errors);
+        } catch (Exception e) {
+            configService.saveOutboundSyncState("reconcile-error: " + e.getMessage(), updated, created, errors + 1);
+            logger.error("[SFDC-Outbound] Reconcile failed", e);
         }
     }
 

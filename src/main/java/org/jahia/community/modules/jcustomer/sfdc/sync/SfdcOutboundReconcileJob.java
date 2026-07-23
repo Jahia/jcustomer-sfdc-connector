@@ -1,0 +1,105 @@
+package org.jahia.community.modules.jcustomer.sfdc.sync;
+
+import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.osgi.BundleUtils;
+import org.jahia.services.scheduler.BackgroundJob;
+import org.jahia.services.scheduler.SchedulerService;
+import org.jahia.settings.SettingsBean;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
+import org.quartz.CronTrigger;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+
+/**
+ * Quartz job that periodically reconciles jCustomer → Salesforce: pushes profiles changed since the
+ * last run to Salesforce Leads. This is the "poll" half of the hybrid outbound trigger — it catches
+ * profile edits that emit no Unomi event (console / REST / batch), which the event webhook cannot see.
+ *
+ * <p>Enabled/cron come from the outbound trigger config in JCR ({@code reconcileEnabled} /
+ * {@code reconcileCron}); {@link #reschedule()} is called when that config is saved.
+ */
+@Component(service = SfdcOutboundReconcileJob.class, immediate = true,
+        configurationPid = "org.jahia.community.jcustomer.sfdc")
+public class SfdcOutboundReconcileJob extends BackgroundJob {
+
+    private static final Logger logger = LoggerFactory.getLogger(SfdcOutboundReconcileJob.class);
+
+    private static final String JOB_NAME     = "jCustomer - SFDC Outbound Reconcile";
+    private static final String TRIGGER_NAME = "SfdcOutboundReconcileTrigger";
+    private static final int    MAX_PROFILES = 500;
+
+    @interface Config {
+        String jcustomer_site_key()        default "mysoprahr";
+        int    sync_delta_buffer_minutes() default 5;
+    }
+
+    private SchedulerService       schedulerService;
+    private ConnectorConfigService configService;
+    @Reference public void setSchedulerService(SchedulerService s)   { this.schedulerService = s; }
+    @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
+
+    private volatile String siteKey = "mysoprahr";
+    private volatile int    buffer  = 5;
+    private JobDetail jobDetail;
+
+    @Activate
+    public void activate(Config config) throws Exception {
+        this.siteKey = config.jcustomer_site_key();
+        this.buffer  = config.sync_delta_buffer_minutes();
+        if (!SettingsBean.getInstance().isProcessingServer()) {
+            logger.info("[SFDC-Reconcile] Not a processing server — skipping scheduler");
+            return;
+        }
+        jobDetail = BackgroundJob.createJahiaJob(JOB_NAME, SfdcOutboundReconcileJob.class);
+        applySchedule();
+    }
+
+    /** Re-reads the JCR reconcile config and (re)schedules or unschedules accordingly. */
+    public synchronized void reschedule() throws Exception {
+        if (jobDetail == null || !SettingsBean.getInstance().isProcessingServer()) return;
+        applySchedule();
+    }
+
+    private void applySchedule() throws Exception {
+        Map<String, String> t = configService.loadOutboundTriggers();
+        boolean enabled = "true".equalsIgnoreCase(t.getOrDefault("reconcileEnabled", "false"));
+        String cron     = t.getOrDefault("reconcileCron", "0 0/15 * * * ?");
+
+        try { schedulerService.getScheduler().unscheduleJob(TRIGGER_NAME, jobDetail.getGroup()); } catch (Exception ignored) {}
+
+        if (!enabled) {
+            logger.info("[SFDC-Reconcile] Reconcile disabled — not scheduled");
+            return;
+        }
+        CronTrigger trigger = new CronTrigger(TRIGGER_NAME, jobDetail.getGroup(),
+                jobDetail.getName(), jobDetail.getGroup(), cron);
+        schedulerService.getScheduler().scheduleJob(jobDetail, trigger);
+        logger.info("[SFDC-Reconcile] Scheduled with cron: {}", cron);
+    }
+
+    @Deactivate
+    public void deactivate() throws Exception {
+        if (jobDetail != null && SettingsBean.getInstance().isProcessingServer()) {
+            try { schedulerService.getScheduler().unscheduleJob(TRIGGER_NAME, jobDetail.getGroup()); } catch (Exception ignored) {}
+            try { schedulerService.getScheduler().deleteJob(jobDetail.getName(), jobDetail.getGroup()); } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
+    public void executeJahiaJob(JobExecutionContext ctx) {
+        logger.info("[SFDC-Reconcile] ===== Reconcile firing at {} =====", ctx.getFireTime());
+        SfdcOutboundSyncService svc = BundleUtils.getOsgiService(SfdcOutboundSyncService.class, null);
+        if (svc == null) {
+            logger.error("[SFDC-Reconcile] SfdcOutboundSyncService not available — aborting");
+            return;
+        }
+        svc.runReconcile(siteKey, buffer, MAX_PROFILES);
+    }
+}

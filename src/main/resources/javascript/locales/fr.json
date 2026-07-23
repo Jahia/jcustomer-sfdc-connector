@@ -85,7 +85,16 @@
         "saved":    "Configuration des déclencheurs sortants enregistrée",
         "enabled":        { "label": "Activer l'envoi événementiel", "desc": "Interrupteur principal. Désactivé, aucun événement jCustomer n'envoie vers Salesforce (l'envoi manuel et la réconciliation planifiée restent actifs)." },
         "profileUpdate":  { "label": "À la mise à jour du profil", "desc": "Envoie lorsqu'un profil jCustomer est mis à jour. Le profil doit avoir un email (utilisé pour retrouver ou créer le Lead)." },
-        "formSubmission": { "label": "À la soumission d'un formulaire", "desc": "Envoie lorsqu'un visiteur soumet un formulaire suivi par jCustomer." }
+        "formSubmission": { "label": "À la soumission d'un formulaire", "desc": "Envoie lorsqu'un visiteur soumet un formulaire suivi par jCustomer." },
+        "reconcileStarted": "Réconciliation lancée en arrière-plan — consultez le dernier envoi sortant pour le résultat.",
+        "reconcile": {
+          "title":    "Réconciliation planifiée",
+          "subtitle": "Envoie périodiquement les profils modifiés depuis la dernière exécution — capture les modifications sans événement jCustomer (console / REST / batch), pas seulement l'activité du tracker.",
+          "enabled":  { "label": "Activer la réconciliation planifiée", "desc": "Exécute un balayage périodique envoyant les profils récemment modifiés vers Salesforce." },
+          "cron":     "Expression cron",
+          "now":      "Réconcilier maintenant",
+          "running":  "Réconciliation..."
+        }
       },
       "sync": {
         "title":         "Envoyer vers Salesforce",

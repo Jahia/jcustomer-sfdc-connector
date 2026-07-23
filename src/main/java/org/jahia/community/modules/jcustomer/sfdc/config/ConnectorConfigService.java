@@ -184,11 +184,14 @@ public class ConnectorConfigService {
         result.put("enabled",          "false");
         result.put("onProfileUpdate",  "true");
         result.put("onFormSubmission", "true");
+        // reconcile (poll) — catches profile changes that emit no Unomi event (console/REST edits)
+        result.put("reconcileEnabled", "false");
+        result.put("reconcileCron",    "0 0/15 * * * ?");
         try {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
                 if (!session.nodeExists(OUTBOUND_TRIGGERS_NODE)) return null;
                 JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_TRIGGERS_NODE);
-                for (String prop : new String[]{"enabled","onProfileUpdate","onFormSubmission"}) {
+                for (String prop : new String[]{"enabled","onProfileUpdate","onFormSubmission","reconcileEnabled","reconcileCron"}) {
                     if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
                 }
                 return null;
@@ -197,6 +200,33 @@ public class ConnectorConfigService {
             logger.warn("[SFDC-Config] Could not load outbound triggers — using defaults: {}", e.getMessage());
         }
         return result;
+    }
+
+    /** Timestamp (ISO-8601) of the last outbound reconcile run, or {@code null} if never run. */
+    public String getOutboundReconcileAt() {
+        try {
+            return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (!session.nodeExists(OUTBOUND_STATE_NODE)) return null;
+                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE);
+                return node.hasProperty("lastReconcileAt") ? node.getProperty("lastReconcileAt").getString() : null;
+            });
+        } catch (Exception e) {
+            logger.warn("[SFDC-Config] Could not read lastReconcileAt: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public void setOutboundReconcileAt(String iso) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                JCRNodeWrapper node = ensurePath(session, OUTBOUND_STATE_NODE);
+                node.setProperty("lastReconcileAt", iso);
+                session.save();
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Could not save lastReconcileAt", e);
+        }
     }
 
     public void saveOutboundTriggers(Map<String, String> values) throws Exception {

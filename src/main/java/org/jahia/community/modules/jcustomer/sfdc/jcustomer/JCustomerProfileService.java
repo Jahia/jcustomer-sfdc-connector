@@ -105,6 +105,51 @@ public class JCustomerProfileService {
         logger.debug("[JC-Profile] Updated profile {} — {} properties", profileId, properties.size());
     }
 
+    /**
+     * Returns profiles whose {@code systemProperties.lastUpdated} is at or after {@code isoCutoff}
+     * and that carry an email — used by the outbound reconcile job to catch profile changes that
+     * did not emit a Unomi event (e.g. console/REST edits). Newest first.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> searchProfilesModifiedSince(String isoCutoff, String siteKey, int limit) throws Exception {
+        if (contextServerService == null || !contextServerService.isAvailable(siteKey)) {
+            throw new IllegalStateException("[JC-Profile] ContextServerService not available for site " + siteKey);
+        }
+        Map<String, Object> dateParams = new HashMap<>();
+        dateParams.put("propertyName", "systemProperties.lastUpdated");
+        dateParams.put("comparisonOperator", "greaterThanOrEqualTo");
+        dateParams.put("propertyValueDate", isoCutoff);
+
+        Map<String, Object> emailParams = new HashMap<>();
+        emailParams.put("propertyName", "properties.email");
+        emailParams.put("comparisonOperator", "exists");
+
+        Map<String, Object> boolParams = new HashMap<>();
+        boolParams.put("operator", "and");
+        boolParams.put("subConditions", List.of(
+                condition("profilePropertyCondition", dateParams),
+                condition("profilePropertyCondition", emailParams)));
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("condition", condition("booleanCondition", boolParams));
+        searchRequest.put("offset", 0);
+        searchRequest.put("limit", limit);
+        searchRequest.put("sortby", "systemProperties.lastUpdated:desc");
+
+        Map<String, Object> result = contextServerService.executePostRequest(
+                siteKey, "/cxs/profiles/search", searchRequest, null, null, Map.class);
+        if (result == null) return List.of();
+        List<Map<String, Object>> list = (List<Map<String, Object>>) result.get("list");
+        return list != null ? list : List.of();
+    }
+
+    private static Map<String, Object> condition(String type, Map<String, Object> parameterValues) {
+        Map<String, Object> c = new HashMap<>();
+        c.put("type", type);
+        c.put("parameterValues", parameterValues);
+        return c;
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")

@@ -85,7 +85,16 @@
         "saved":    "Outbound trigger configuration saved",
         "enabled":        { "label": "Enable event-based push", "desc": "Master switch. When off, no jCustomer event pushes to Salesforce (manual push and scheduled reconcile still work)." },
         "profileUpdate":  { "label": "On profile update", "desc": "Push when a jCustomer profile is updated. The profile must have an email (used to match or create the Lead)." },
-        "formSubmission": { "label": "On form submission", "desc": "Push when a visitor submits a form tracked by jCustomer." }
+        "formSubmission": { "label": "On form submission", "desc": "Push when a visitor submits a form tracked by jCustomer." },
+        "reconcileStarted": "Reconcile started in the background — check the last outbound run for results.",
+        "reconcile": {
+          "title":    "Scheduled reconcile",
+          "subtitle": "Periodically push profiles changed since the last run — catches edits that emit no jCustomer event (console / REST / batch), not just tracker activity.",
+          "enabled":  { "label": "Enable scheduled reconcile", "desc": "Run a periodic sweep pushing recently-changed profiles to Salesforce." },
+          "cron":     "Cron expression",
+          "now":      "Reconcile now",
+          "running":  "Reconciling..."
+        }
       },
       "sync": {
         "title":         "Push to Salesforce",
