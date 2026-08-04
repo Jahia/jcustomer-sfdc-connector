@@ -1,0 +1,68 @@
+// jCustomer to Salesforce Connector - JCR node type definitions for the connector configuration
+// stored under /settings/jcustomer-sfdc-connector. Replaces the previous nt:unstructured storage
+// so the config is typed and browsable in the JCR / Definitions browser.
+
+<jcsfdcnt = 'http://jahia.org/modules/jcustomer-sfdc-connector/nt/1.0'>
+<jnt = 'http://www.jahia.org/jahia/nt/1.0'>
+<nt = 'http://www.jcp.org/jcr/nt/1.0'>
+
+// Salesforce connection (shared by both sync directions)
+[jcsfdcnt:connection] > jnt:content
+ - instanceUrl (string)
+ - clientId (string)
+ - sfUsername (string)
+ - privateKey (string)
+ - apiVersion (string) = 'v66.0'
+ - enabled (boolean) = false
+
+// One field mapping entry: jCustomer property to Salesforce field. Shared by inbound and outbound.
+[jcsfdcnt:fieldMapping] > jnt:content
+ - sfField (string)
+ - jcProperty (string)
+ - required (boolean) = false
+
+// Ordered list of field mappings for one Salesforce object
+[jcsfdcnt:objectMapping] > jnt:content orderable
+ + * (jcsfdcnt:fieldMapping)
+
+// Set of object mappings (Contact / Account / Lead)
+[jcsfdcnt:mappingSet] > jnt:content
+ + * (jcsfdcnt:objectMapping)
+
+// Inbound (SFDC to jCustomer) triggers
+[jcsfdcnt:triggers] > jnt:content
+ - loginEnabled (boolean) = true
+ - schedulerEnabled (boolean) = true
+ - schedulerCron (string) = '0 0 5 * * ?'
+
+// Outbound (jCustomer to SFDC) triggers
+[jcsfdcnt:outboundTriggers] > jnt:content
+ - outboundObject (string) = 'Lead' < 'Lead', 'Contact'
+ - onProfileUpdate (boolean) = true
+ - onFormSubmission (boolean) = true
+ - reconcileEnabled (boolean) = false
+ - reconcileCron (string) = '0 0 * * * ?'
+
+// Last-run state, shared by inbound and outbound (all properties optional)
+[jcsfdcnt:syncState] > jnt:content
+ - lastSyncAt (date)
+ - lastReconcileAt (date)
+ - lastSyncStatus (string)
+ - lastSyncCount (long)
+ - lastSyncUpdated (long)
+ - lastSyncCreated (long)
+ - lastSyncErrors (long)
+
+// Outbound container
+[jcsfdcnt:outbound] > jnt:content
+ + mapping (jcsfdcnt:mappingSet)
+ + triggers (jcsfdcnt:outboundTriggers)
+ + syncState (jcsfdcnt:syncState)
+
+// Root connector configuration node (/settings/jcustomer-sfdc-connector)
+[jcsfdcnt:connectorConfig] > jnt:content
+ + connection (jcsfdcnt:connection)
+ + mapping (jcsfdcnt:mappingSet)
+ + triggers (jcsfdcnt:triggers)
+ + syncState (jcsfdcnt:syncState)
+ + outbound (jcsfdcnt:outbound)

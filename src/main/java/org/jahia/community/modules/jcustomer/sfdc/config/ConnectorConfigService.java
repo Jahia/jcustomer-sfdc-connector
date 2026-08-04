@@ -7,23 +7,28 @@ import org.osgi.service.component.annotations.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
+import javax.jcr.Value;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Reads and writes connector configuration from/to JCR.
+ * Reads and writes connector configuration from/to JCR, under
+ * {@code /settings/jcustomer-sfdc-connector}, using the typed node types defined in
+ * {@code META-INF/definitions.cnd} ({@code jcsfdcnt:*}). Properties are stored with their real JCR
+ * type (boolean / long / date), while the public API stays string-based for the actions/UI.
  *
- * JCR structure (under /settings/jcustomer-sfdc-connector):
- *   connection/   → instanceUrl, clientId, sfUsername, privateKey, apiVersion, enabled
- *   mapping/
- *     Contact/    → orderable child nodes: sfField, jcProperty
- *     Account/    → orderable child nodes: sfField, jcProperty (via Account.X relationship)
- *   syncState/    → lastSyncAt, lastSyncStatus, lastSyncCount, lastSyncErrors
+ * <p>Reads are tolerant of the legacy {@code nt:unstructured} + all-String layout (JCR converts on
+ * read), so it works both before and after the one-time migration.
  */
 @Component(service = ConnectorConfigService.class, immediate = true)
 public class ConnectorConfigService {
@@ -34,11 +39,27 @@ public class ConnectorConfigService {
     public static final String CONN_NODE    = CONFIG_ROOT + "/connection";
     public static final String MAPPING_NODE = CONFIG_ROOT + "/mapping";
     public static final String STATE_NODE   = CONFIG_ROOT + "/syncState";
+    public static final String TRIGGERS_NODE = CONFIG_ROOT + "/triggers";
 
-    // Outbound (jCustomer → SFDC) — kept in a separate subtree from the inbound config.
     public static final String OUTBOUND_MAPPING_NODE  = CONFIG_ROOT + "/outbound/mapping";
     public static final String OUTBOUND_STATE_NODE    = CONFIG_ROOT + "/outbound/syncState";
     public static final String OUTBOUND_TRIGGERS_NODE = CONFIG_ROOT + "/outbound/triggers";
+
+    // Node types (see META-INF/definitions.cnd)
+    public static final String NT_CONFIG          = "jcsfdcnt:connectorConfig";
+    public static final String NT_CONNECTION      = "jcsfdcnt:connection";
+    public static final String NT_MAPPING_SET     = "jcsfdcnt:mappingSet";
+    public static final String NT_OBJECT_MAPPING  = "jcsfdcnt:objectMapping";
+    public static final String NT_FIELD_MAPPING   = "jcsfdcnt:fieldMapping";
+    public static final String NT_TRIGGERS        = "jcsfdcnt:triggers";
+    public static final String NT_OUTBOUND        = "jcsfdcnt:outbound";
+    public static final String NT_OUTBOUND_TRIG   = "jcsfdcnt:outboundTriggers";
+    public static final String NT_SYNC_STATE      = "jcsfdcnt:syncState";
+
+    // Which properties are booleans (so the String-based public API converts correctly on save).
+    private static final Set<String> CONNECTION_BOOLEANS = Set.of("enabled");
+    private static final Set<String> TRIGGER_BOOLEANS    = Set.of("loginEnabled", "schedulerEnabled");
+    private static final Set<String> OUTBOUND_BOOLEANS   = Set.of("onProfileUpdate", "onFormSubmission", "reconcileEnabled");
 
     // ── Connection ────────────────────────────────────────────────────────────
 
@@ -49,11 +70,9 @@ public class ConnectorConfigService {
                 if (!session.nodeExists(CONN_NODE)) return null;
                 JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(CONN_NODE);
                 for (String prop : new String[]{"instanceUrl","clientId","sfUsername","privateKey","apiVersion","enabled"}) {
-                    if (node.hasProperty(prop)) {
-                        result.put(prop, node.getProperty(prop).getString());
-                    }
+                    if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
                 }
-                result.putIfAbsent("apiVersion", "v66.0"); // default
+                result.putIfAbsent("apiVersion", "v66.0");
                 return null;
             });
         } catch (Exception e) {
@@ -64,11 +83,8 @@ public class ConnectorConfigService {
 
     public void saveConnection(Map<String, String> values) throws Exception {
         JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            JCRNodeWrapper root = ensurePath(session, CONFIG_ROOT);
-            JCRNodeWrapper conn = ensureChild(root, "connection");
-            for (Map.Entry<String, String> e : values.entrySet()) {
-                conn.setProperty(e.getKey(), e.getValue());
-            }
+            JCRNodeWrapper conn = ensureChild(getOrCreateRoot(session), "connection", NT_CONNECTION);
+            writeStringOrBoolean(conn, values, CONNECTION_BOOLEANS);
             session.save();
             return null;
         });
@@ -77,27 +93,10 @@ public class ConnectorConfigService {
 
     // ── Mapping ───────────────────────────────────────────────────────────────
 
-    /** Returns the inbound (SFDC → jCustomer) mapping for a given SF object. */
-    public List<Map<String, String>> loadMapping(String sfObject) {
-        return loadMappingAt(MAPPING_NODE, sfObject);
-    }
-
-    /** Replaces the full inbound mapping for a given SF object. */
-    public void saveMapping(String sfObject, List<Map<String, String>> mappings) throws Exception {
-        saveMappingAt(MAPPING_NODE, sfObject, mappings);
-    }
-
-    /** Returns the outbound (jCustomer → SFDC) mapping for a given SF object. */
-    public List<Map<String, String>> loadOutboundMapping(String sfObject) {
-        return loadMappingAt(OUTBOUND_MAPPING_NODE, sfObject);
-    }
-
-    /** Replaces the full outbound mapping for a given SF object. */
-    public void saveOutboundMapping(String sfObject, List<Map<String, String>> mappings) throws Exception {
-        saveMappingAt(OUTBOUND_MAPPING_NODE, sfObject, mappings);
-    }
-
-    // Shared mapping load/save — inbound and outbound differ only by base node.
+    public List<Map<String, String>> loadMapping(String sfObject)         { return loadMappingAt(MAPPING_NODE, sfObject); }
+    public void saveMapping(String sfObject, List<Map<String, String>> m) throws Exception { saveMapping(false, sfObject, m); }
+    public List<Map<String, String>> loadOutboundMapping(String sfObject) { return loadMappingAt(OUTBOUND_MAPPING_NODE, sfObject); }
+    public void saveOutboundMapping(String sfObject, List<Map<String, String>> m) throws Exception { saveMapping(true, sfObject, m); }
 
     private List<Map<String, String>> loadMappingAt(String baseNode, String sfObject) {
         List<Map<String, String>> result = new ArrayList<>();
@@ -105,8 +104,7 @@ public class ConnectorConfigService {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
                 String path = baseNode + "/" + sfObject;
                 if (!session.nodeExists(path)) return null;
-                JCRNodeWrapper folder = (JCRNodeWrapper) session.getNode(path);
-                NodeIterator it = folder.getNodes();
+                NodeIterator it = ((JCRNodeWrapper) session.getNode(path)).getNodes();
                 while (it.hasNext()) {
                     JCRNodeWrapper m = (JCRNodeWrapper) it.nextNode();
                     Map<String, String> entry = new HashMap<>();
@@ -124,64 +122,125 @@ public class ConnectorConfigService {
         return result;
     }
 
-    private void saveMappingAt(String baseNode, String sfObject, List<Map<String, String>> mappings) throws Exception {
+    private void saveMapping(boolean outbound, String sfObject, List<Map<String, String>> mappings) throws Exception {
         JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            JCRNodeWrapper folder = ensurePath(session, baseNode + "/" + sfObject);
-
-            // Remove existing children
+            JCRNodeWrapper folder = ensureObjectMapping(session, outbound, sfObject);
             NodeIterator it = folder.getNodes();
             while (it.hasNext()) it.nextNode().remove();
-
-            // Add new mappings
             int i = 0;
             for (Map<String, String> m : mappings) {
-                JCRNodeWrapper node = folder.addNode("mapping-" + i, "nt:unstructured");
-                if (m.containsKey("sfField"))    node.setProperty("sfField",    m.get("sfField"));
-                if (m.containsKey("jcProperty")) node.setProperty("jcProperty", m.get("jcProperty"));
-                if (m.containsKey("required"))   node.setProperty("required",   m.get("required"));
+                JCRNodeWrapper node = folder.addNode("mapping-" + i, NT_FIELD_MAPPING);
+                if (m.containsKey("sfField"))    node.setProperty("sfField",    orEmpty(m.get("sfField")));
+                if (m.containsKey("jcProperty")) node.setProperty("jcProperty", orEmpty(m.get("jcProperty")));
+                if (m.containsKey("required"))   node.setProperty("required",   toBool(m.get("required")));
                 i++;
             }
             session.save();
             return null;
         });
-        logger.info("[SFDC-Config] Mapping saved at {}/{} ({} entries)", baseNode, sfObject, mappings.size());
+        logger.info("[SFDC-Config] Mapping saved ({}{}) — {} entries", outbound ? "outbound/" : "", sfObject, mappings.size());
     }
 
-    // ── Outbound triggers (which jCustomer events push to SFDC) ──────────────────
+    // ── Inbound triggers ──────────────────────────────────────────────────────
 
-    public Map<String, String> loadOutboundTriggers() {
+    public Map<String, String> loadTriggers() {
         Map<String, String> result = new HashMap<>();
-        // defaults: master off until the event webhook is deployed; both events pre-selected.
-        result.put("enabled",          "false");
-        result.put("onProfileUpdate",  "true");
-        result.put("onFormSubmission", "true");
-        // Single Salesforce target object for outbound (Lead OR Contact — not both).
-        result.put("outboundObject",   "Lead");
-        // reconcile (poll) — catches profile changes that emit no Unomi event (console/REST edits)
-        result.put("reconcileEnabled", "false");
-        result.put("reconcileCron",    "0 0 * * * ?");
-        try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                if (!session.nodeExists(OUTBOUND_TRIGGERS_NODE)) return null;
-                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_TRIGGERS_NODE);
-                for (String prop : new String[]{"enabled","onProfileUpdate","onFormSubmission","outboundObject","reconcileEnabled","reconcileCron"}) {
-                    if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
-                }
-                return null;
-            });
-        } catch (Exception e) {
-            logger.warn("[SFDC-Config] Could not load outbound triggers — using defaults: {}", e.getMessage());
-        }
+        result.put("loginEnabled", "true");
+        result.put("schedulerEnabled", "true");
+        result.put("schedulerCron", "0 0 5 * * ?");
+        readInto(TRIGGERS_NODE, result, "loginEnabled", "schedulerEnabled", "schedulerCron");
         return result;
     }
 
-    /** Timestamp (ISO-8601) of the last outbound reconcile run, or {@code null} if never run. */
+    public void saveTriggers(Map<String, String> values) throws Exception {
+        JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+            JCRNodeWrapper triggers = ensureChild(getOrCreateRoot(session), "triggers", NT_TRIGGERS);
+            writeStringOrBoolean(triggers, values, TRIGGER_BOOLEANS);
+            session.save();
+            return null;
+        });
+        logger.info("[SFDC-Config] Triggers saved: {}", values);
+    }
+
+    // ── Outbound triggers ─────────────────────────────────────────────────────
+
+    public Map<String, String> loadOutboundTriggers() {
+        Map<String, String> result = new HashMap<>();
+        result.put("onProfileUpdate", "true");
+        result.put("onFormSubmission", "true");
+        result.put("outboundObject", "Lead");
+        result.put("reconcileEnabled", "false");
+        result.put("reconcileCron", "0 0 * * * ?");
+        readInto(OUTBOUND_TRIGGERS_NODE, result,
+                "onProfileUpdate", "onFormSubmission", "outboundObject", "reconcileEnabled", "reconcileCron");
+        return result;
+    }
+
+    public void saveOutboundTriggers(Map<String, String> values) throws Exception {
+        JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+            JCRNodeWrapper triggers = ensureChild(ensureOutbound(session), "triggers", NT_OUTBOUND_TRIG);
+            writeStringOrBoolean(triggers, values, OUTBOUND_BOOLEANS);
+            session.save();
+            return null;
+        });
+        logger.info("[SFDC-Config] Outbound triggers saved: {}", values);
+    }
+
+    // ── Sync state ────────────────────────────────────────────────────────────
+
+    public Map<String, String> loadSyncState() {
+        Map<String, String> state = new HashMap<>();
+        readState(STATE_NODE, state, "lastSyncCount", "lastSyncErrors");
+        return state;
+    }
+
+    public void saveSyncState(String status, long count, long errors) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                JCRNodeWrapper state = ensureChild(getOrCreateRoot(session), "syncState", NT_SYNC_STATE);
+                state.setProperty("lastSyncAt", nowCalendar());
+                state.setProperty("lastSyncStatus", orEmpty(status));
+                state.setProperty("lastSyncCount", count);
+                state.setProperty("lastSyncErrors", errors);
+                session.save();
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Failed to save sync state", e);
+        }
+    }
+
+    public String getLastSyncAt() { return loadSyncState().getOrDefault("lastSyncAt", null); }
+
+    public Map<String, String> loadOutboundSyncState() {
+        Map<String, String> state = new HashMap<>();
+        readState(OUTBOUND_STATE_NODE, state, "lastSyncUpdated", "lastSyncCreated", "lastSyncErrors");
+        return state;
+    }
+
+    public void saveOutboundSyncState(String status, long updated, long created, long errors) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                JCRNodeWrapper state = ensureChild(ensureOutbound(session), "syncState", NT_SYNC_STATE);
+                state.setProperty("lastSyncAt", nowCalendar());
+                state.setProperty("lastSyncStatus", orEmpty(status));
+                state.setProperty("lastSyncUpdated", updated);
+                state.setProperty("lastSyncCreated", created);
+                state.setProperty("lastSyncErrors", errors);
+                session.save();
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Failed to save outbound sync state", e);
+        }
+    }
+
+    /** ISO-8601 timestamp of the last outbound reconcile run, or {@code null}. */
     public String getOutboundReconcileAt() {
         try {
             return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
                 if (!session.nodeExists(OUTBOUND_STATE_NODE)) return null;
-                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE);
-                return node.hasProperty("lastReconcileAt") ? node.getProperty("lastReconcileAt").getString() : null;
+                return isoOf((JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE), "lastReconcileAt");
             });
         } catch (Exception e) {
             logger.warn("[SFDC-Config] Could not read lastReconcileAt: {}", e.getMessage());
@@ -192,8 +251,8 @@ public class ConnectorConfigService {
     public void setOutboundReconcileAt(String iso) {
         try {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                JCRNodeWrapper node = ensurePath(session, OUTBOUND_STATE_NODE);
-                node.setProperty("lastReconcileAt", iso);
+                JCRNodeWrapper state = ensureChild(ensureOutbound(session), "syncState", NT_SYNC_STATE);
+                setDate(state, "lastReconcileAt", iso);
                 session.save();
                 return null;
             });
@@ -202,147 +261,86 @@ public class ConnectorConfigService {
         }
     }
 
-    public void saveOutboundTriggers(Map<String, String> values) throws Exception {
-        JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            JCRNodeWrapper triggers = ensurePath(session, OUTBOUND_TRIGGERS_NODE);
-            for (Map.Entry<String, String> e : values.entrySet()) {
-                triggers.setProperty(e.getKey(), e.getValue());
-            }
-            session.save();
-            return null;
-        });
-        logger.info("[SFDC-Config] Outbound triggers saved: {}", values);
+    // ── Typed-node helpers ────────────────────────────────────────────────────
+
+    private JCRNodeWrapper getOrCreateRoot(JCRSessionWrapper session) throws RepositoryException {
+        if (session.nodeExists(CONFIG_ROOT)) return (JCRNodeWrapper) session.getNode(CONFIG_ROOT);
+        JCRNodeWrapper settings = (JCRNodeWrapper) session.getNode("/settings");
+        return (JCRNodeWrapper) settings.addNode("jcustomer-sfdc-connector", NT_CONFIG);
     }
 
-    // ── Outbound sync state ─────────────────────────────────────────────────────
-
-    public void saveOutboundSyncState(String status, long updated, long created, long errors) {
-        try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                JCRNodeWrapper state = ensurePath(session, OUTBOUND_STATE_NODE);
-                state.setProperty("lastSyncAt",      java.time.Instant.now().toString());
-                state.setProperty("lastSyncStatus",  status);
-                state.setProperty("lastSyncUpdated", String.valueOf(updated));
-                state.setProperty("lastSyncCreated", String.valueOf(created));
-                state.setProperty("lastSyncErrors",  String.valueOf(errors));
-                session.save();
-                return null;
-            });
-        } catch (Exception e) {
-            logger.error("[SFDC-Config] Failed to save outbound sync state", e);
-        }
+    private JCRNodeWrapper ensureOutbound(JCRSessionWrapper session) throws RepositoryException {
+        return ensureChild(getOrCreateRoot(session), "outbound", NT_OUTBOUND);
     }
 
-    public Map<String, String> loadOutboundSyncState() {
-        Map<String, String> state = new HashMap<>();
-        try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                if (!session.nodeExists(OUTBOUND_STATE_NODE)) return null;
-                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE);
-                for (String prop : new String[]{"lastSyncAt","lastSyncStatus","lastSyncUpdated","lastSyncCreated","lastSyncErrors"}) {
-                    if (node.hasProperty(prop)) state.put(prop, node.getProperty(prop).getString());
-                }
-                return null;
-            });
-        } catch (Exception e) {
-            logger.error("[SFDC-Config] Failed to load outbound sync state", e);
-        }
-        return state;
+    private JCRNodeWrapper ensureObjectMapping(JCRSessionWrapper session, boolean outbound, String sfObject) throws RepositoryException {
+        JCRNodeWrapper parent = outbound ? ensureOutbound(session) : getOrCreateRoot(session);
+        JCRNodeWrapper mappingSet = ensureChild(parent, "mapping", NT_MAPPING_SET);
+        return ensureChild(mappingSet, sfObject, NT_OBJECT_MAPPING);
     }
 
-    // ── Sync state ────────────────────────────────────────────────────────────
-
-    public Map<String, String> loadSyncState() {
-        Map<String, String> state = new HashMap<>();
-        try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                if (!session.nodeExists(STATE_NODE)) return null;
-                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(STATE_NODE);
-                for (String prop : new String[]{"lastSyncAt","lastSyncStatus","lastSyncCount","lastSyncErrors"}) {
-                    if (node.hasProperty(prop)) state.put(prop, node.getProperty(prop).getString());
-                }
-                return null;
-            });
-        } catch (Exception e) {
-            logger.error("[SFDC-Config] Failed to load sync state", e);
-        }
-        return state;
-    }
-
-    public void saveSyncState(String status, long count, long errors) {
-        try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                JCRNodeWrapper root  = ensurePath(session, CONFIG_ROOT);
-                JCRNodeWrapper state = ensureChild(root, "syncState");
-                state.setProperty("lastSyncAt",     java.time.Instant.now().toString());
-                state.setProperty("lastSyncStatus",  status);
-                state.setProperty("lastSyncCount",   String.valueOf(count));
-                state.setProperty("lastSyncErrors",  String.valueOf(errors));
-                session.save();
-                return null;
-            });
-        } catch (Exception e) {
-            logger.error("[SFDC-Config] Failed to save sync state", e);
-        }
-    }
-
-    public String getLastSyncAt() {
-        return loadSyncState().getOrDefault("lastSyncAt", null);
-    }
-
-    // ── Triggers ──────────────────────────────────────────────────────────────
-
-    public static final String TRIGGERS_NODE = CONFIG_ROOT + "/triggers";
-
-    public Map<String, String> loadTriggers() {
-        Map<String, String> result = new HashMap<>();
-        // defaults
-        result.put("loginEnabled",    "true");
-        result.put("schedulerEnabled","true");
-        result.put("schedulerCron",   "0 0 5 * * ?");
-        try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                if (!session.nodeExists(TRIGGERS_NODE)) return null;
-                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(TRIGGERS_NODE);
-                for (String prop : new String[]{"loginEnabled","schedulerEnabled","schedulerCron"}) {
-                    if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
-                }
-                return null;
-            });
-        } catch (Exception e) {
-            logger.warn("[SFDC-Config] Could not load triggers — using defaults: {}", e.getMessage());
-        }
-        return result;
-    }
-
-    public void saveTriggers(Map<String, String> values) throws Exception {
-        JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            JCRNodeWrapper root     = ensurePath(session, CONFIG_ROOT);
-            JCRNodeWrapper triggers = ensureChild(root, "triggers");
-            for (Map.Entry<String, String> e : values.entrySet()) {
-                triggers.setProperty(e.getKey(), e.getValue());
-            }
-            session.save();
-            return null;
-        });
-        logger.info("[SFDC-Config] Triggers saved: {}", values);
-    }
-
-    // ── JCR helpers ───────────────────────────────────────────────────────────
-
-    private JCRNodeWrapper ensurePath(JCRSessionWrapper session, String path) throws RepositoryException {
-        if (session.nodeExists(path)) return (JCRNodeWrapper) session.getNode(path);
-        String[] parts = path.substring(1).split("/");
-        Node current = session.getRootNode();
-        for (String part : parts) {
-            if (!current.hasNode(part)) current = current.addNode(part, "nt:unstructured");
-            else current = current.getNode(part);
-        }
-        return (JCRNodeWrapper) current;
-    }
-
-    private JCRNodeWrapper ensureChild(JCRNodeWrapper parent, String name) throws RepositoryException {
+    private static JCRNodeWrapper ensureChild(JCRNodeWrapper parent, String name, String type) throws RepositoryException {
         if (parent.hasNode(name)) return (JCRNodeWrapper) parent.getNode(name);
-        return (JCRNodeWrapper) parent.addNode(name, "nt:unstructured");
+        return (JCRNodeWrapper) parent.addNode(name, type);
     }
+
+    /** Writes each value as a boolean when its key is in {@code booleanKeys}, else as a string. */
+    private static void writeStringOrBoolean(JCRNodeWrapper node, Map<String, String> values, Set<String> booleanKeys)
+            throws RepositoryException {
+        for (Map.Entry<String, String> e : values.entrySet()) {
+            if (booleanKeys.contains(e.getKey())) node.setProperty(e.getKey(), toBool(e.getValue()));
+            else node.setProperty(e.getKey(), orEmpty(e.getValue()));
+        }
+    }
+
+    /** Reads named properties (as strings) into {@code target}, tolerant of missing node/props. */
+    private void readInto(String path, Map<String, String> target, String... props) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (!session.nodeExists(path)) return null;
+                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(path);
+                for (String p : props) if (node.hasProperty(p)) target.put(p, node.getProperty(p).getString());
+                return null;
+            });
+        } catch (Exception e) {
+            logger.warn("[SFDC-Config] Could not read {} — using defaults: {}", path, e.getMessage());
+        }
+    }
+
+    /** Reads a sync-state node: lastSyncAt (as ISO), lastSyncStatus, plus the given count props. */
+    private void readState(String path, Map<String, String> target, String... countProps) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (!session.nodeExists(path)) return null;
+                JCRNodeWrapper node = (JCRNodeWrapper) session.getNode(path);
+                String iso = isoOf(node, "lastSyncAt");
+                if (iso != null) target.put("lastSyncAt", iso);
+                if (node.hasProperty("lastSyncStatus")) target.put("lastSyncStatus", node.getProperty("lastSyncStatus").getString());
+                for (String p : countProps) if (node.hasProperty(p)) target.put(p, node.getProperty(p).getString());
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Failed to load sync state at {}", path, e);
+        }
+    }
+
+    private static void setDate(JCRNodeWrapper node, String name, String iso) throws RepositoryException {
+        if (iso == null || iso.isBlank()) return;
+        node.setProperty(name, GregorianCalendar.from(Instant.parse(iso).atZone(ZoneOffset.UTC)));
+    }
+
+    private static Calendar nowCalendar() {
+        return GregorianCalendar.from(Instant.now().atZone(ZoneOffset.UTC));
+    }
+
+    /** Returns a property as an ISO-8601 instant string, whether it is stored as date or (legacy) string. */
+    private static String isoOf(JCRNodeWrapper node, String name) throws RepositoryException {
+        if (!node.hasProperty(name)) return null;
+        Value v = node.getProperty(name).getValue();
+        if (v.getType() == PropertyType.DATE) return v.getDate().toInstant().toString();
+        return v.getString();
+    }
+
+    private static boolean toBool(String s) { return "true".equalsIgnoreCase(s); }
+    private static String orEmpty(String s) { return s == null ? "" : s; }
 }

@@ -114,13 +114,20 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 
 ### Connection & mapping — stored in JCR (`/settings/jcustomer-sfdc-connector`)
 
-- `connection/` — `instanceUrl`, `clientId`, `sfUsername`, `privateKey` (PEM), `apiVersion`, `enabled` (shared by both directions)
-- `mapping/{Contact,Account,Lead}` — inbound `sfField → jcProperty` entries
-- `triggers/` — inbound `loginEnabled`, `schedulerEnabled`, `schedulerCron`
-- `syncState/` — last inbound run
-- `outbound/mapping/{Lead,Contact}` — outbound `jcProperty → sfField` entries
-- `outbound/triggers/` — `outboundObject` (Lead | Contact), `onProfileUpdate`, `onFormSubmission`, `reconcileEnabled`, `reconcileCron`
-- `outbound/syncState/` — last outbound run + poll watermark
+The config is stored under **typed** node types (namespace `jcsfdcnt`, defined in `META-INF/definitions.cnd`), so it is browsable and self-describing in the JCR / Definitions browser. Property types are real JCR types (`boolean`, `long`, `date`, `string`) rather than untyped strings.
+
+| Node | Type | Holds |
+|---|---|---|
+| `connection/` | `jcsfdcnt:connection` | `instanceUrl`, `clientId`, `sfUsername`, `privateKey` (PEM), `apiVersion`, `enabled` (shared by both directions) |
+| `mapping/{Contact,Account,Lead}` | `jcsfdcnt:objectMapping` → `jcsfdcnt:fieldMapping` | inbound `sfField → jcProperty` entries |
+| `triggers/` | `jcsfdcnt:triggers` | inbound `loginEnabled`, `schedulerEnabled`, `schedulerCron` |
+| `syncState/` | `jcsfdcnt:syncState` | last inbound run |
+| `outbound/` | `jcsfdcnt:outbound` | outbound container |
+| `outbound/mapping/{Lead,Contact}` | `jcsfdcnt:mappingSet` → `jcsfdcnt:objectMapping` | outbound `jcProperty → sfField` entries |
+| `outbound/triggers/` | `jcsfdcnt:outboundTriggers` | `outboundObject` (Lead \| Contact), `onProfileUpdate`, `onFormSubmission`, `reconcileEnabled`, `reconcileCron` |
+| `outbound/syncState/` | `jcsfdcnt:syncState` | last outbound run + poll watermark |
+
+**Migration from earlier versions:** releases before 2.2.0 stored this config as `nt:unstructured`. The one-time patch `migration/2100-migrate-config-to-typed.groovy` converts an existing `/settings/jcustomer-sfdc-connector` subtree to the typed node types. Deploy the 2.2.0+ jar first (so the CND is registered), then drop the patch into `<jahia>/patches/groovy/`; the Jahia Patcher runs it once and renames it `.installed`. It is idempotent and reads tolerantly of the legacy layout, so re-running or running on an already-typed config is a no-op.
 
 ---
 
@@ -161,9 +168,11 @@ src/
 │   ├── sync/        # SfdcSyncService + SfdcSyncJob (inbound); SfdcOutboundSyncService + SfdcOutboundReconcileJob (outbound)
 │   └── events/      # SfdcLoginEventHandler (login-triggered inbound sync)
 ├── main/resources/
+│   ├── META-INF/definitions.cnd   # JCR node types for the typed config (jcsfdcnt:*)
 │   ├── META-INF/configurations/   # OSGi .cfg + CSRF-guard whitelist
 │   └── javascript/                # compiled React UI + locales (en/fr)
-└── javascript/SfdcAdmin/          # React 18 admin UI sources
+├── javascript/SfdcAdmin/          # React 18 admin UI sources
+migration/                         # one-time Groovy patches (nt:unstructured -> typed)
 ```
 
 ---
