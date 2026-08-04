@@ -13,7 +13,8 @@ connection, map fields, and drive the sync in both directions.
 <!-- -->
 
 - **Module:** `org.jahia.community.modules:jcustomer-sfdc-connector`
-- **Version:** `2.2.0`
+- **Repository:** https://github.com/Jahia/jcustomer-sfdc-connector
+- **Version:** `2.2.1`
 - **Platform:** Jahia 8.2 (parent POM `org.jahia.modules:jahia-modules:8.2.0.0`), Java 17
 - **Front-end:** React 18 UI extension (Webpack / Module Federation, `@jahia/ui-extender`, `@jahia/moonstone`)
 
@@ -83,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.2.0.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.2.1.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.2.0.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.2.1.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.

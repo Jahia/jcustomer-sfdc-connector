@@ -1,7 +1,13 @@
 {
   "name": "jcustomer-sfdc-connector",
-  "version": "2.3.0-SNAPSHOT",
+  "version": "2.2.1",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jahia/jcustomer-sfdc-connector.git"
+  },
+  "homepage": "https://github.com/Jahia/jcustomer-sfdc-connector#readme",
+  "bugs": "https://github.com/Jahia/jcustomer-sfdc-connector/issues",
   "packageManager": "yarn@1.22.22",
   "scripts": {
     "build": "yarn webpack",
