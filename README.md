@@ -13,7 +13,7 @@ connection, map fields, and drive the sync in both directions.
 <!-- -->
 
 - **Module:** `org.jahia.community.modules:jcustomer-sfdc-connector`
-- **Version:** `2.1.0`
+- **Version:** `2.2.0`
 - **Platform:** Jahia 8.2 (parent POM `org.jahia.modules:jahia-modules:8.2.0.0`), Java 17
 - **Front-end:** React 18 UI extension (Webpack / Module Federation, `@jahia/ui-extender`, `@jahia/moonstone`)
 
@@ -83,11 +83,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.1.0.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.2.0.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.1.0.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.2.0.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -138,6 +138,13 @@ jContent → **Administration → SF Connector** (route `/sfdc-connector`). Thre
 - **Connection** *(shared)* — Salesforce Connected App credentials (PEM private key); "Test connection".
 - **SFDC → jCustomer** — Field Mapping (Contact/Account/Lead) · Synchronisation (state + "Sync now") · inbound triggers.
 - **jCustomer → SFDC** — Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + what to sync (profile updates / form submissions) + Schedule (friendly cron builder, down to every minute) + "Sync now" · last outbound run.
+
+### Exporting a mapping
+
+Each Field Mapping tab (both directions) has **Export CSV** and **Export JSON** buttons that download the currently-selected object's mapping. The export is generated in the browser — no server round-trip. Only complete rows (both the jCustomer property and the Salesforce field set) are written; the download filename encodes direction and object, e.g. `sfdc-inbound-Contact-mapping.csv`, `sfdc-outbound-Lead-mapping.json`.
+
+- **CSV** — a `jcProperty,sfField` header plus one line per mapping (RFC-4180 quoting).
+- **JSON** — a self-describing document: `{ "direction", "object", "exportedAt", "mappings": [ { "jcProperty", "sfField" } ] }`.
 
 ---
 

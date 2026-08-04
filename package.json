@@ -1,6 +1,6 @@
 {
   "name": "jcustomer-sfdc-connector",
-  "version": "2.2.0-SNAPSHOT",
+  "version": "2.2.0",
   "packageManager": "yarn@1.22.22",
   "scripts": {
     "build": "yarn webpack",
