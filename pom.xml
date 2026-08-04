@@ -23,6 +23,14 @@
         scheduled batch sync and immediate sync on login events.
     </description>
 
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
         <jahia.plugin.version>6.9</jahia.plugin.version>
         <yarn.arguments>build:production</yarn.arguments>

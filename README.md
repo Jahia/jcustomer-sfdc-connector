@@ -198,4 +198,4 @@ migration/                         # one-time Groovy patches (nt:unstructured ->
 
 ## License
 
-Provided as a Jahia community module. See the repository for license details.
+[MIT](LICENSE) — free to use, modify, and distribute. Provided as-is, without warranty.
