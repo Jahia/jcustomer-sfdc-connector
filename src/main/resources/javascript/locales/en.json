@@ -1,7 +1,9 @@
 {
   "jcustomer-sfdc-connector": {
     "admin": {
-      "accordion": { "label": "SF Connector" },
+      "accordion": {
+        "label": "SF Connector"
+      },
       "panel": {
         "label": "Salesforce ⇄ jCustomer Sync",
         "title": "Salesforce ⇄ jCustomer Connector",
@@ -9,146 +11,163 @@
       },
       "tab": {
         "connection": "Connection",
-        "mapping":    "Field Mapping",
-        "sync":       "Synchronisation",
-        "triggers":   "Event Triggers",
-        "inbound":    "SFDC → jCustomer",
-        "outbound":   "jCustomer → SFDC"
+        "mapping": "Field Mapping",
+        "sync": "Synchronisation",
+        "triggers": "Event Triggers",
+        "inbound": "SFDC → jCustomer",
+        "outbound": "jCustomer → SFDC"
       }
     },
     "connection": {
-      "title":    "Salesforce Connection",
+      "title": "Salesforce Connection",
       "subtitle": "Enter your Salesforce Connected App credentials. The private key must be in PEM format (PKCS#8 or PKCS#1). The public certificate must be uploaded to the Connected App.",
-      "enabled":  "Connector enabled",
-      "test":     "Test connection",
-      "testing":  "Testing...",
-      "testOk":   "Connection successful",
+      "enabled": "Connector enabled",
+      "test": "Test connection",
+      "testing": "Testing...",
+      "testOk": "Connection successful",
       "testFail": "Connection failed",
-      "saved":    "Connection settings saved"
+      "saved": "Connection settings saved"
     },
     "mapping": {
-      "title":          "Field Mapping",
-      "subtitle":       "Map Salesforce Contact, Account and Lead fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
+      "title": "Field Mapping",
+      "subtitle": "Map Salesforce Contact, Account and Lead fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
       "col": {
-        "sfField":    "Salesforce Field",
+        "sfField": "Salesforce Field",
         "jcProperty": "jCustomer Property"
       },
-      "selectField":    "— Select SF field —",
+      "selectField": "— Select SF field —",
       "selectProperty": "— Select jC property —",
-      "addRow":         "Add mapping",
-      "empty":          "No mappings configured. Click \"Add mapping\" to start.",
-      "saved":          "Mapping saved for {{obj}}"
+      "addRow": "Add mapping",
+      "empty": "No mappings configured. Click \"Add mapping\" to start.",
+      "saved": "Mapping saved for {{obj}}",
+      "export": {
+        "csv": "Export CSV",
+        "json": "Export JSON",
+        "csvTip": "Download the {{obj}} field mapping as a CSV file",
+        "jsonTip": "Download the {{obj}} field mapping as a JSON file",
+        "done": "Exported {{count}} {{obj}} mapping row(s) as {{fmt}}",
+        "empty": "No complete {{obj}} mappings to export"
+      }
     },
     "sync": {
-      "title":   "Last synchronisation",
+      "title": "Last synchronisation",
       "subtitle": "Monitor the last sync status.",
       "triggers": {
-        "title":   "Sync triggers",
+        "title": "Sync triggers",
         "subtitle": "Choose which events trigger a Salesforce data sync into jCustomer.",
-        "save":    "Save trigger config",
+        "save": "Save trigger config",
         "login": {
           "label": "Login trigger",
-          "desc":  "Sync this user's SF data immediately on every Jahia login (OIDC, local). Runs asynchronously — login is not delayed."
+          "desc": "Sync this user's SF data immediately on every Jahia login (OIDC, local). Runs asynchronously — login is not delayed."
         },
         "scheduler": {
-          "label":    "Scheduled batch",
-          "desc":     "Sync all subscribed users on a cron schedule. Uses delta sync (LastModifiedDate filter).",
-          "cron":     "Cron expression",
+          "label": "Scheduled batch",
+          "desc": "Sync all subscribed users on a cron schedule. Uses delta sync (LastModifiedDate filter).",
+          "cron": "Cron expression",
           "cronHint": "Format: second minute hour day month weekday — e.g. 0 0 5 * * ? = daily at 05:00 UTC"
         },
         "manual": {
           "label": "Manual sync",
-          "desc":  "Full sync of all mapped contacts immediately (ignores lastSyncAt delta)."
+          "desc": "Full sync of all mapped contacts immediately (ignores lastSyncAt delta)."
         }
       },
       "triggersSaved": "Trigger configuration saved",
       "lastRun": "Last run",
-      "status":  "Status",
+      "status": "Status",
       "updated": "Records updated",
-      "errors":  "Errors",
+      "errors": "Errors",
       "noState": "No sync has run yet.",
       "trigger": "Sync now",
       "running": "Running...",
       "started": "Sync started in background. Refresh in a few seconds to see the result.",
-      "info":    "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file."
+      "info": "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file."
     },
     "outbound": {
       "mapping": {
-        "title":    "Outbound Field Mapping",
+        "title": "Outbound Field Mapping",
         "subtitle": "Map jCustomer profile properties to Salesforce Lead and Contact fields. Matched records are updated; unmatched profiles create a new one.",
-        "saved":    "Outbound {{obj}} mapping saved",
+        "saved": "Outbound {{obj}} mapping saved",
         "requiredHint": "Salesforce requires {{fields}} to create a {{obj}} — map them, or only existing {{obj}} records will be updated."
       },
       "triggers": {
-        "title":    "Sync to Salesforce",
+        "title": "Sync to Salesforce",
         "subtitle": "The connector polls jCustomer for changed profiles and pushes them to Salesforce as Leads.",
-        "saved":    "Outbound sync configuration saved",
+        "saved": "Outbound sync configuration saved",
         "pollStarted": "Sync started in the background — check the last outbound run for results.",
-        "pollNow":     "Sync now",
+        "pollNow": "Sync now",
         "pollRunning": "Syncing...",
         "what": {
-          "title":    "What to sync",
+          "title": "What to sync",
           "subtitle": "Choose which jCustomer changes are pushed to Salesforce (applies to both scheduled and manual runs)."
         },
         "target": {
-          "label":   "Target Salesforce object",
-          "desc":    "Push profiles to this object only. Configure its field mapping in the Field Mapping tab.",
-          "lead":    "Lead",
+          "label": "Target Salesforce object",
+          "desc": "Push profiles to this object only. Configure its field mapping in the Field Mapping tab.",
+          "lead": "Lead",
           "contact": "Contact"
         },
-        "profileUpdate":  { "label": "Profile updates", "desc": "Push profiles whose properties changed since the last run. An email is required to match or create the Lead." },
-        "formSubmission": { "label": "Form submissions", "desc": "Push profiles that submitted a form since the last run." },
+        "profileUpdate": {
+          "label": "Profile updates",
+          "desc": "Push profiles whose properties changed since the last run. An email is required to match or create the Lead."
+        },
+        "formSubmission": {
+          "label": "Form submissions",
+          "desc": "Push profiles that submitted a form since the last run."
+        },
         "schedule": {
-          "title":    "Schedule",
+          "title": "Schedule",
           "subtitle": "Run the sync automatically on a cron schedule. You can also run it on demand with \"Sync now\".",
-          "enabled":  { "label": "Enable scheduled sync", "desc": "Poll jCustomer periodically and push changed profiles to Salesforce." },
-          "cron":     "Cron expression"
+          "enabled": {
+            "label": "Enable scheduled sync",
+            "desc": "Poll jCustomer periodically and push changed profiles to Salesforce."
+          },
+          "cron": "Cron expression"
         }
       },
       "sync": {
-        "title":         "Push to Salesforce",
-        "subtitle":      "Push a jCustomer profile to a Salesforce Lead (matched by email; created if none exists). Event-based and scheduled pushes are configured separately.",
-        "emailLabel":    "Profile email",
+        "title": "Push to Salesforce",
+        "subtitle": "Push a jCustomer profile to a Salesforce Lead (matched by email; created if none exists). Event-based and scheduled pushes are configured separately.",
+        "emailLabel": "Profile email",
         "emailRequired": "Enter a profile email to push.",
-        "push":          "Push now",
-        "pushing":       "Pushing...",
-        "result":        "Push {{status}} for {{email}}",
-        "lastRun":       "Last outbound run",
-        "at":            "When",
-        "status":        "Status",
-        "created":       "Leads created",
-        "updated":       "Leads updated",
-        "errors":        "Errors"
+        "push": "Push now",
+        "pushing": "Pushing...",
+        "result": "Push {{status}} for {{email}}",
+        "lastRun": "Last outbound run",
+        "at": "When",
+        "status": "Status",
+        "created": "Leads created",
+        "updated": "Leads updated",
+        "errors": "Errors"
       }
     },
     "cron": {
       "every": "Every",
-      "on":    "on",
+      "on": "on",
       "onDay": "on day",
-      "at":    "at",
+      "at": "at",
       "minutesUnit": "minutes",
       "freq": {
         "minutes": "Minutes",
-        "hourly":  "Hour",
-        "daily":   "Day",
-        "weekly":  "Week",
+        "hourly": "Hour",
+        "daily": "Day",
+        "weekly": "Week",
         "monthly": "Month"
       },
       "day": {
-        "monday":    "Monday",
-        "tuesday":   "Tuesday",
+        "monday": "Monday",
+        "tuesday": "Tuesday",
         "wednesday": "Wednesday",
-        "thursday":  "Thursday",
-        "friday":    "Friday",
-        "saturday":  "Saturday",
-        "sunday":    "Sunday"
+        "thursday": "Thursday",
+        "friday": "Friday",
+        "saturday": "Saturday",
+        "sunday": "Sunday"
       }
     },
     "action": {
-      "save":    "Save",
-      "saving":  "Saving...",
-      "reload":  "Reload",
-      "remove":  "Remove row",
+      "save": "Save",
+      "saving": "Saving...",
+      "reload": "Reload",
+      "remove": "Remove row",
       "refresh": "Refresh"
     }
   }

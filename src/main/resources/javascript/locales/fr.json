@@ -1,7 +1,9 @@
 {
   "jcustomer-sfdc-connector": {
     "admin": {
-      "accordion": { "label": "Connecteur SF" },
+      "accordion": {
+        "label": "Connecteur SF"
+      },
       "panel": {
         "label": "Sync Salesforce ⇄ jCustomer",
         "title": "Connecteur Salesforce ⇄ jCustomer",
@@ -9,146 +11,163 @@
       },
       "tab": {
         "connection": "Connexion",
-        "mapping":    "Mapping des champs",
-        "sync":       "Synchronisation",
-        "triggers":   "Déclencheurs",
-        "inbound":    "SFDC → jCustomer",
-        "outbound":   "jCustomer → SFDC"
+        "mapping": "Mapping des champs",
+        "sync": "Synchronisation",
+        "triggers": "Déclencheurs",
+        "inbound": "SFDC → jCustomer",
+        "outbound": "jCustomer → SFDC"
       }
     },
     "connection": {
-      "title":    "Connexion Salesforce",
+      "title": "Connexion Salesforce",
       "subtitle": "Renseignez les credentials de votre Connected App Salesforce. La clé privée doit être au format PEM (PKCS#8 ou PKCS#1). Le certificat public doit être uploadé dans la Connected App.",
-      "enabled":  "Connecteur activé",
-      "test":     "Tester la connexion",
-      "testing":  "Test en cours...",
-      "testOk":   "Connexion réussie",
+      "enabled": "Connecteur activé",
+      "test": "Tester la connexion",
+      "testing": "Test en cours...",
+      "testOk": "Connexion réussie",
       "testFail": "Échec de connexion",
-      "saved":    "Paramètres de connexion sauvegardés"
+      "saved": "Paramètres de connexion sauvegardés"
     },
     "mapping": {
-      "title":          "Mapping des champs",
-      "subtitle":       "Mappez les champs Contact, Account et Lead Salesforce vers les propriétés de profil jCustomer. L'email (→ email) est requis pour la correspondance des profils.",
+      "title": "Mapping des champs",
+      "subtitle": "Mappez les champs Contact, Account et Lead Salesforce vers les propriétés de profil jCustomer. L'email (→ email) est requis pour la correspondance des profils.",
       "col": {
-        "sfField":    "Champ Salesforce",
+        "sfField": "Champ Salesforce",
         "jcProperty": "Propriété jCustomer"
       },
-      "selectField":    "— Sélectionner un champ SF —",
+      "selectField": "— Sélectionner un champ SF —",
       "selectProperty": "— Sélectionner une propriété jC —",
-      "addRow":         "Ajouter un mapping",
-      "empty":          "Aucun mapping configuré. Cliquez sur \"Ajouter un mapping\" pour commencer.",
-      "saved":          "Mapping sauvegardé pour {{obj}}"
+      "addRow": "Ajouter un mapping",
+      "empty": "Aucun mapping configuré. Cliquez sur \"Ajouter un mapping\" pour commencer.",
+      "saved": "Mapping sauvegardé pour {{obj}}",
+      "export": {
+        "csv": "Exporter CSV",
+        "json": "Exporter JSON",
+        "csvTip": "Télécharger le mapping des champs {{obj}} au format CSV",
+        "jsonTip": "Télécharger le mapping des champs {{obj}} au format JSON",
+        "done": "{{count}} ligne(s) de mapping {{obj}} exportée(s) au format {{fmt}}",
+        "empty": "Aucun mapping {{obj}} complet à exporter"
+      }
     },
     "sync": {
-      "title":   "Dernière synchronisation",
+      "title": "Dernière synchronisation",
       "subtitle": "État de la dernière synchronisation.",
       "triggers": {
-        "title":   "Déclencheurs de synchronisation",
+        "title": "Déclencheurs de synchronisation",
         "subtitle": "Choisissez quels événements déclenchent une synchronisation Salesforce → jCustomer.",
-        "save":    "Sauvegarder la configuration",
+        "save": "Sauvegarder la configuration",
         "login": {
           "label": "Déclencheur à la connexion",
-          "desc":  "Synchronise les données SF de l'utilisateur immédiatement à chaque connexion Jahia (OIDC, local). S'exécute en arrière-plan sans bloquer la connexion."
+          "desc": "Synchronise les données SF de l'utilisateur immédiatement à chaque connexion Jahia (OIDC, local). S'exécute en arrière-plan sans bloquer la connexion."
         },
         "scheduler": {
-          "label":    "Batch planifié",
-          "desc":     "Synchronise tous les contacts sur un planning cron. Utilise le delta sync (filtre LastModifiedDate).",
-          "cron":     "Expression cron",
+          "label": "Batch planifié",
+          "desc": "Synchronise tous les contacts sur un planning cron. Utilise le delta sync (filtre LastModifiedDate).",
+          "cron": "Expression cron",
           "cronHint": "Format : seconde minute heure jour mois semaine — ex. 0 0 5 * * ? = quotidien à 05h00 UTC"
         },
         "manual": {
           "label": "Synchronisation manuelle",
-          "desc":  "Synchronisation complète immédiate de tous les contacts (ignore le delta lastSyncAt)."
+          "desc": "Synchronisation complète immédiate de tous les contacts (ignore le delta lastSyncAt)."
         }
       },
       "triggersSaved": "Configuration des déclencheurs sauvegardée",
       "lastRun": "Dernière exécution",
-      "status":  "Statut",
+      "status": "Statut",
       "updated": "Enregistrements mis à jour",
-      "errors":  "Erreurs",
+      "errors": "Erreurs",
       "noState": "Aucune synchronisation n'a encore été exécutée.",
       "trigger": "Synchroniser maintenant",
       "running": "En cours...",
       "started": "Synchronisation lancée en arrière-plan. Actualisez dans quelques secondes pour voir le résultat.",
-      "info":    "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi."
+      "info": "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi."
     },
     "outbound": {
       "mapping": {
-        "title":    "Mapping des champs sortants",
+        "title": "Mapping des champs sortants",
         "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead et Contact Salesforce. Les enregistrements correspondants sont mis à jour ; les profils sans correspondance en créent un nouveau.",
-        "saved":    "Mapping {{obj}} sortant enregistré",
+        "saved": "Mapping {{obj}} sortant enregistré",
         "requiredHint": "Salesforce exige {{fields}} pour créer un {{obj}} — mappez-les, sinon seuls les {{obj}} existants seront mis à jour."
       },
       "triggers": {
-        "title":    "Synchronisation vers Salesforce",
+        "title": "Synchronisation vers Salesforce",
         "subtitle": "Le connecteur interroge jCustomer pour détecter les profils modifiés et les envoie vers Salesforce en tant que Leads.",
-        "saved":    "Configuration de synchronisation sortante enregistrée",
+        "saved": "Configuration de synchronisation sortante enregistrée",
         "pollStarted": "Synchronisation lancée en arrière-plan — consultez le dernier envoi sortant pour le résultat.",
-        "pollNow":     "Synchroniser maintenant",
+        "pollNow": "Synchroniser maintenant",
         "pollRunning": "Synchronisation...",
         "what": {
-          "title":    "Éléments à synchroniser",
+          "title": "Éléments à synchroniser",
           "subtitle": "Choisissez quelles modifications jCustomer sont envoyées vers Salesforce (s'applique aux exécutions planifiées et manuelles)."
         },
         "target": {
-          "label":   "Objet Salesforce cible",
-          "desc":    "N'envoie les profils que vers cet objet. Configurez son mapping dans l'onglet Mapping des champs.",
-          "lead":    "Lead",
+          "label": "Objet Salesforce cible",
+          "desc": "N'envoie les profils que vers cet objet. Configurez son mapping dans l'onglet Mapping des champs.",
+          "lead": "Lead",
           "contact": "Contact"
         },
-        "profileUpdate":  { "label": "Mises à jour de profil", "desc": "Envoie les profils dont les propriétés ont changé depuis la dernière exécution. Un email est requis pour retrouver ou créer le Lead." },
-        "formSubmission": { "label": "Soumissions de formulaire", "desc": "Envoie les profils ayant soumis un formulaire depuis la dernière exécution." },
+        "profileUpdate": {
+          "label": "Mises à jour de profil",
+          "desc": "Envoie les profils dont les propriétés ont changé depuis la dernière exécution. Un email est requis pour retrouver ou créer le Lead."
+        },
+        "formSubmission": {
+          "label": "Soumissions de formulaire",
+          "desc": "Envoie les profils ayant soumis un formulaire depuis la dernière exécution."
+        },
         "schedule": {
-          "title":    "Planification",
+          "title": "Planification",
           "subtitle": "Exécute la synchronisation automatiquement selon un planning cron. Vous pouvez aussi la lancer à la demande avec « Synchroniser maintenant ».",
-          "enabled":  { "label": "Activer la synchronisation planifiée", "desc": "Interroge jCustomer périodiquement et envoie les profils modifiés vers Salesforce." },
-          "cron":     "Expression cron"
+          "enabled": {
+            "label": "Activer la synchronisation planifiée",
+            "desc": "Interroge jCustomer périodiquement et envoie les profils modifiés vers Salesforce."
+          },
+          "cron": "Expression cron"
         }
       },
       "sync": {
-        "title":         "Envoyer vers Salesforce",
-        "subtitle":      "Envoyez un profil jCustomer vers un Lead Salesforce (correspondance par email ; créé s'il n'existe pas). Les envois événementiels et planifiés sont configurés séparément.",
-        "emailLabel":    "Email du profil",
+        "title": "Envoyer vers Salesforce",
+        "subtitle": "Envoyez un profil jCustomer vers un Lead Salesforce (correspondance par email ; créé s'il n'existe pas). Les envois événementiels et planifiés sont configurés séparément.",
+        "emailLabel": "Email du profil",
         "emailRequired": "Saisissez un email de profil à envoyer.",
-        "push":          "Envoyer",
-        "pushing":       "Envoi...",
-        "result":        "Envoi {{status}} pour {{email}}",
-        "lastRun":       "Dernier envoi sortant",
-        "at":            "Quand",
-        "status":        "Statut",
-        "created":       "Leads créés",
-        "updated":       "Leads mis à jour",
-        "errors":        "Erreurs"
+        "push": "Envoyer",
+        "pushing": "Envoi...",
+        "result": "Envoi {{status}} pour {{email}}",
+        "lastRun": "Dernier envoi sortant",
+        "at": "Quand",
+        "status": "Statut",
+        "created": "Leads créés",
+        "updated": "Leads mis à jour",
+        "errors": "Erreurs"
       }
     },
     "cron": {
       "every": "Chaque",
-      "on":    "le",
+      "on": "le",
       "onDay": "le jour",
-      "at":    "à",
+      "at": "à",
       "minutesUnit": "minutes",
       "freq": {
         "minutes": "Minutes",
-        "hourly":  "Heure",
-        "daily":   "Jour",
-        "weekly":  "Semaine",
+        "hourly": "Heure",
+        "daily": "Jour",
+        "weekly": "Semaine",
         "monthly": "Mois"
       },
       "day": {
-        "monday":    "Lundi",
-        "tuesday":   "Mardi",
+        "monday": "Lundi",
+        "tuesday": "Mardi",
         "wednesday": "Mercredi",
-        "thursday":  "Jeudi",
-        "friday":    "Vendredi",
-        "saturday":  "Samedi",
-        "sunday":    "Dimanche"
+        "thursday": "Jeudi",
+        "friday": "Vendredi",
+        "saturday": "Samedi",
+        "sunday": "Dimanche"
       }
     },
     "action": {
-      "save":    "Sauvegarder",
-      "saving":  "Sauvegarde...",
-      "reload":  "Recharger",
-      "remove":  "Supprimer",
+      "save": "Sauvegarder",
+      "saving": "Sauvegarde...",
+      "reload": "Recharger",
+      "remove": "Supprimer",
       "refresh": "Actualiser"
     }
   }

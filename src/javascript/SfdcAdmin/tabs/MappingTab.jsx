@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Dropdown, Loader, Separator, Tab, TabItem, Typography } from '@jahia/moonstone';
 import { getSfdcFields, getJcProperties, getMapping, saveMapping } from '../api';
+import { exportMappingCsv, exportMappingJson } from '../exportMapping';
 import classes from './MappingTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
@@ -76,6 +77,14 @@ export default function MappingTab() {
         } finally { setSaving(false); }
     };
 
+    const handleExport = fmt => {
+        const fn = fmt === 'csv' ? exportMappingCsv : exportMappingJson;
+        const n = fn('inbound', sfObject, mappings[sfObject]);
+        setMsg(n === 0
+            ? { ok: false, text: t(`${NS}:mapping.export.empty`, { obj: sfObject }) }
+            : { ok: true, text: t(`${NS}:mapping.export.done`, { obj: sfObject, count: n, fmt: fmt.toUpperCase() }) });
+    };
+
     const buildSfOptions = obj => (sfFields[obj] || []).map(f => ({
         label: `${f.label || f.name} (${f.name})`,
         value: obj === 'Account' && !f.name.startsWith('Account.') ? `Account.${f.name}` : f.name
@@ -103,6 +112,10 @@ export default function MappingTab() {
                     <Button variant="default" color="accent"
                         label={saving ? t(`${NS}:action.saving`) : t(`${NS}:action.save`)}
                         isDisabled={saving} isLoading={saving} onClick={handleSave} />
+                    <Button variant="ghost" label={t(`${NS}:mapping.export.csv`)}
+                        title={t(`${NS}:mapping.export.csvTip`, { obj: sfObject })} onClick={() => handleExport('csv')} />
+                    <Button variant="ghost" label={t(`${NS}:mapping.export.json`)}
+                        title={t(`${NS}:mapping.export.jsonTip`, { obj: sfObject })} onClick={() => handleExport('json')} />
                     <Button variant="ghost" label={t(`${NS}:action.reload`)} onClick={load} isDisabled={loading} />
                 </div>
             </div>
