@@ -14,7 +14,6 @@ connection, map fields, and drive the sync in both directions.
 
 - **Module:** `org.jahia.community.modules:jcustomer-sfdc-connector`
 - **Repository:** https://github.com/Jahia/jcustomer-sfdc-connector
-- **Version:** `2.2.1`
 - **Platform:** Jahia 8.2 (parent POM `org.jahia.modules:jahia-modules:8.2.0.0`), Java 17
 - **Front-end:** React 18 UI extension (Webpack / Module Federation, `@jahia/ui-extender`, `@jahia/moonstone`)
 
