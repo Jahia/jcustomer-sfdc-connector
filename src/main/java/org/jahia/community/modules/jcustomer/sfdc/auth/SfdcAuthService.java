@@ -1,6 +1,7 @@
 package org.jahia.community.modules.jcustomer.sfdc.auth;
 
 import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.json.JSONObject;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
@@ -97,16 +98,15 @@ public class SfdcAuthService {
     private String buildJwt(String instanceUrl, String clientId, String sfUsername, String pem) throws Exception {
         long now = Instant.now().getEpochSecond();
 
-        // Header
-        String header = base64Url("{\"alg\":\"RS256\"}");
-
-        // Payload
-        String payload = base64Url(
-            "{\"iss\":\"" + esc(clientId) + "\"," +
-            "\"sub\":\"" + esc(sfUsername) + "\"," +
-            "\"aud\":\"" + esc(instanceUrl) + "\"," +
-            "\"exp\":" + (now + JWT_TTL_SECONDS) + "}"
-        );
+        // Build header and payload with a real JSON encoder so any characters in clientId /
+        // sfUsername / instanceUrl (backslash, control chars, …) are escaped correctly.
+        String header  = base64Url(new JSONObject().put("alg", "RS256").toString());
+        String payload = base64Url(new JSONObject()
+                .put("iss", clientId)
+                .put("sub", sfUsername)
+                .put("aud", instanceUrl)
+                .put("exp", now + JWT_TTL_SECONDS)
+                .toString());
 
         String signingInput = header + "." + payload;
 
@@ -138,10 +138,9 @@ public class SfdcAuthService {
             throw new RuntimeException("[SFDC-Auth] Token request failed HTTP " + response.statusCode() + ": " + response.body());
         }
 
-        // Parse access_token from JSON response
         String responseBody = response.body();
-        String token = extractJsonString(responseBody, "access_token");
-        if (token == null) {
+        String token = new JSONObject(responseBody).optString("access_token", null);
+        if (token == null || token.isBlank()) {
             throw new RuntimeException("[SFDC-Auth] No access_token in response: " + responseBody);
         }
         return token;
@@ -167,19 +166,5 @@ public class SfdcAuthService {
 
     private static String base64Url(String input) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(input.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String esc(String s) {
-        return s == null ? "" : s.replace("\"", "\\\"");
-    }
-
-    /** Minimal JSON string extractor — avoids needing a JSON library in auth path. */
-    static String extractJsonString(String json, String key) {
-        String search = "\"" + key + "\":\"";
-        int start = json.indexOf(search);
-        if (start < 0) return null;
-        start += search.length();
-        int end = json.indexOf("\"", start);
-        return end < 0 ? null : json.substring(start, end);
     }
 }

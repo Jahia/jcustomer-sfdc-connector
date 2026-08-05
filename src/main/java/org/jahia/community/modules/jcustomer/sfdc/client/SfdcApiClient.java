@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Salesforce REST API client.
@@ -35,6 +36,21 @@ public class SfdcApiClient {
     private static final HttpClient HTTP = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(15))
         .build();
+
+    /**
+     * Salesforce sObject API-name pattern — a letter/underscore followed by letters, digits or
+     * underscores. Applied at every sink that concatenates {@code type} into a SOQL {@code FROM}
+     * clause or a REST URL path, so an admin-supplied string that reaches here as user input
+     * (Describe UI, outbound object) cannot break out of the intended shape.
+     */
+    private static final Pattern SOBJECT_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    private static String requireSObjectName(String type) {
+        if (type == null || !SOBJECT_NAME.matcher(type).matches()) {
+            throw new IllegalArgumentException("Invalid Salesforce object name: " + type);
+        }
+        return type;
+    }
 
     private SfdcAuthService    authService;
     private ConnectorConfigService configService;
@@ -80,6 +96,7 @@ public class SfdcApiClient {
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, String>> describeObject(String sobjectName) throws Exception {
+        requireSObjectName(sobjectName);
         Map<String, String> cfg = configService.loadConnection();
         String instanceUrl = cfg.get("instanceUrl");
         if (instanceUrl != null) instanceUrl = instanceUrl.replaceAll("/+$", ""); // strip trailing slashes
@@ -134,6 +151,7 @@ public class SfdcApiClient {
      */
     public String findSObjectIdByEmail(String type, String email) throws Exception {
         if (email == null || email.isBlank()) return null;
+        requireSObjectName(type);
         String escaped = email.replace("\\", "\\\\").replace("'", "\\'");
         String where = "Email = '" + escaped + "'";
         if ("Lead".equals(type)) where += " AND IsConverted = false";
@@ -149,6 +167,7 @@ public class SfdcApiClient {
      * POST /services/data/{v}/sobjects/{type}
      */
     public String createSObject(String type, Map<String, Object> fields) throws Exception {
+        requireSObjectName(type);
         String url = dataBaseUrl() + "/sobjects/" + type;
         HttpResponse<String> resp = writeJson("POST", url, new org.json.JSONObject(fields).toString());
         if (resp.statusCode() != 201 && resp.statusCode() != 200) {
@@ -163,6 +182,7 @@ public class SfdcApiClient {
      * PATCH /services/data/{v}/sobjects/{type}/{id} (Salesforce returns 204 No Content).
      */
     public void updateSObject(String type, String id, Map<String, Object> fields) throws Exception {
+        requireSObjectName(type);
         String url = dataBaseUrl() + "/sobjects/" + type + "/" + id;
         HttpResponse<String> resp = writeJson("PATCH", url, new org.json.JSONObject(fields).toString());
         if (resp.statusCode() != 204 && resp.statusCode() != 200) {
