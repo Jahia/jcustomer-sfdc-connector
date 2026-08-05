@@ -34,12 +34,11 @@ public class GetConnectionAction extends AbstractSfdcAdminAction {
         Map<String, String> conn = configService.loadConnection();
         JSONObject response = new JSONObject();
 
-        // Return all fields — private key is returned in full so the form can re-save it
-        // JCR access is already admin-only; the action itself requires a Jahia session
+        // Return the non-secret fields. The private key is never returned; only a boolean
+        // indicates whether one is stored, and to update it the admin must re-paste the PEM.
         for (String key : new String[]{"instanceUrl", "clientId", "sfUsername", "apiVersion", "enabled"}) {
             response.put(key, conn.getOrDefault(key, ""));
         }
-        // Indicate if private key is stored (don't expose value — user must re-paste to update)
         response.put("privateKeyStored", conn.containsKey("privateKey") && !conn.get("privateKey").isBlank());
 
         GetSfdcFieldsAction.write(ctx.getResponse(), response.toString());
