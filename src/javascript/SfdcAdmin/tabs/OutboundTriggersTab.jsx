@@ -6,12 +6,13 @@ import CronBuilder from './CronBuilder';
 import classes from './MappingTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
-const DEFAULT_CRON = '0 0 * * * ?';   // hourly (CronBuilder's finest granularity)
 const isOn = v => v === true || v === 'true';
 
 export default function OutboundTriggersTab() {
     const { t } = useTranslation(NS);
-    const [cfg, setCfg] = useState({ onProfileUpdate: 'true', onFormSubmission: 'true', outboundObject: 'Lead', reconcileEnabled: 'false', reconcileCron: DEFAULT_CRON });
+    // Everything comes from the server: stored triggers, the admin's schedule (reconcileCron, absent =
+    // default) and the default schedule (reconcileCronDefault, from outbound.poll.cron).
+    const [cfg, setCfg] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving,  setSaving]  = useState(false);
     const [polling, setPolling] = useState(false);
@@ -37,8 +38,7 @@ export default function OutboundTriggersTab() {
                 onProfileUpdate:  isOn(cfg.onProfileUpdate),
                 onFormSubmission: isOn(cfg.onFormSubmission),
                 outboundObject:   cfg.outboundObject === 'Contact' ? 'Contact' : 'Lead',
-                reconcileEnabled: isOn(cfg.reconcileEnabled),
-                reconcileCron:    (cfg.reconcileCron || DEFAULT_CRON).trim()
+                reconcileCron:    (cfg.reconcileCron || '').trim()   // empty = default schedule
             });
             setMsg({ ok: true, text: t(`${NS}:outbound.triggers.saved`) });
         } catch (e) {
@@ -120,18 +120,15 @@ export default function OutboundTriggersTab() {
             <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.schedule.subtitle`)}</Typography>
 
             <div className={classes.triggers}>
-                <div className={classes.triggerRow}>
-                    <div className={classes.triggerInfo}>
-                        <Typography variant="body" weight="semiBold">{t(`${NS}:outbound.triggers.schedule.enabled.label`)}</Typography>
-                        <Typography variant="caption" className={classes.subtitle}>{t(`${NS}:outbound.triggers.schedule.enabled.desc`)}</Typography>
-                    </div>
-                    <Switch checked={isOn(cfg.reconcileEnabled)} label=""
-                        onChange={e => set('reconcileEnabled', e.target.checked)} />
-                </div>
+                <Typography variant="caption" className={classes.subtitle}>
+                    {isOn(cfg.onProfileUpdate) || isOn(cfg.onFormSubmission)
+                        ? t(`${NS}:outbound.triggers.schedule.active`)
+                        : t(`${NS}:outbound.triggers.schedule.inactive`)}
+                </Typography>
 
-                {isOn(cfg.reconcileEnabled) && (
+                {(cfg.reconcileCron || cfg.reconcileCronDefault) && (
                     <div className={classes.cronRow}>
-                        <CronBuilder value={cfg.reconcileCron || DEFAULT_CRON}
+                        <CronBuilder value={cfg.reconcileCron || cfg.reconcileCronDefault}
                             onChange={cron => set('reconcileCron', cron)} />
                     </div>
                 )}

@@ -19,12 +19,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Quartz job that periodically reconciles jCustomer → Salesforce: pushes profiles changed since the
- * last run to Salesforce Leads. This is the "poll" half of the hybrid outbound trigger — it catches
- * profile edits that emit no Unomi event (console / REST / batch), which the event webhook cannot see.
+ * Quartz job that polls jCustomer and pushes profiles changed since the last run to the configured
+ * Salesforce object. The connector has no other outbound trigger: this poll is how "Profile updates"
+ * and "Form submissions" fire, so it runs exactly while one of them is on.
  *
- * <p>Enabled/cron come from the outbound trigger config in JCR ({@code reconcileEnabled} /
- * {@code reconcileCron}); {@link #reschedule()} is called when that config is saved.
+ * <p>Schedule: the admin's {@code reconcileCron}, else {@code outbound.poll.cron};
+ * {@link #reschedule()} is called when the trigger config is saved.
  *
  * <p>Quartz creates a new instance per execution, so nothing set on this instance by {@code @Activate}
  * is visible in {@link #executeJahiaJob}: the buffer travels in the JobDataMap and the site is
@@ -69,10 +69,18 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
         applySchedule();
     }
 
+    /**
+     * The outbound triggers are what the poll pushes, and the poll is how they fire: it is scheduled
+     * exactly when "Profile updates" or "Form submissions" is on. The schedule is the admin's
+     * {@code reconcileCron}, else {@link ConnectorConfigService#getDefaultPollCron()}. Turning the
+     * triggers on starts the watermark at that moment (no backfill); turning them all off clears it.
+     */
     private void applySchedule() throws Exception {
         Map<String, String> t = configService.loadOutboundTriggers();
-        boolean enabled = "true".equalsIgnoreCase(t.getOrDefault("reconcileEnabled", "false"));
-        String cron     = t.getOrDefault("reconcileCron", "0 0 * * * ?");
+        boolean enabled = "true".equalsIgnoreCase(t.get("onProfileUpdate"))
+                || "true".equalsIgnoreCase(t.get("onFormSubmission"));
+        String cron = t.get("reconcileCron");
+        if (cron == null || cron.isBlank()) cron = configService.getDefaultPollCron();
 
         // Remove any existing trigger AND job first — scheduleJob(jobDetail, trigger) throws
         // ObjectAlreadyExistsException if the job is already stored (e.g. from a previous enable).
@@ -80,13 +88,23 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
         try { schedulerService.getScheduler().deleteJob(jobDetail.getName(), jobDetail.getGroup()); } catch (Exception ignored) {}
 
         if (!enabled) {
-            logger.info("[SFDC-Reconcile] Reconcile disabled — not scheduled");
+            configService.clearOutboundReconcileAt();
+            logger.info("[SFDC-Reconcile] No outbound trigger on (Profile updates / Form submissions) - poll not scheduled");
             return;
+        }
+        if (cron == null || cron.isBlank()) {
+            logger.error("[SFDC-Reconcile] Outbound trigger on but no poll schedule: choose one in the Triggers tab "
+                    + "or set outbound.poll.cron in org.jahia.community.jcustomer.sfdc");
+            return;
+        }
+        if (configService.getOutboundReconcileAt() == null) {
+            configService.setOutboundReconcileAt(java.time.Instant.now().toString());   // start from now, no backfill
         }
         CronTrigger trigger = new CronTrigger(TRIGGER_NAME, jobDetail.getGroup(),
                 jobDetail.getName(), jobDetail.getGroup(), cron);
         schedulerService.getScheduler().scheduleJob(jobDetail, trigger);
-        logger.info("[SFDC-Reconcile] Scheduled with cron: {}", cron);
+        logger.info("[SFDC-Reconcile] Poll scheduled with cron {} (profiles={}, forms={})",
+                cron, t.get("onProfileUpdate"), t.get("onFormSubmission"));
     }
 
     @Deactivate

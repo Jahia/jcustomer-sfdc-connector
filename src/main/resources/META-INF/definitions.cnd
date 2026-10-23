@@ -38,10 +38,10 @@
 // Outbound (jCustomer to SFDC) triggers
 [jcsfdcnt:outboundTriggers] > jnt:content
  - outboundObject (string) = 'Lead' < 'Lead', 'Contact'
- - onProfileUpdate (boolean) = true
- - onFormSubmission (boolean) = true
- - reconcileEnabled (boolean) = false
- - reconcileCron (string) = '0 0 * * * ?'
+ - onProfileUpdate (boolean)
+ - onFormSubmission (boolean)
+ - reconcileEnabled (boolean)
+ - reconcileCron (string)
 
 // Last-run state, shared by inbound and outbound (all properties optional)
 [jcsfdcnt:syncState] > jnt:content
