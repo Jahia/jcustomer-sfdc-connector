@@ -18,3 +18,16 @@
 .triggerInfo { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .cronRow { display: flex; flex-direction: column; gap: 6px; padding-left: 16px; border-left: 3px solid var(--color-gray-200, #e5e7eb); max-width: 640px; }
 .sectionTitle { margin-top: 8px; }
+
+/* History: spacing between result chips (layout only; components are Moonstone) */
+.chipRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}

@@ -4,6 +4,13 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-10-23
+
+### Added
+- **Sync history**, one **History** tab per direction: each run (when, what triggered it, created / updated / skipped / error counts) as a collapsible row; expanding it shows its records: who (email, profile id), outcome, the Salesforce record, the fields written and why a record was skipped or failed. Built with Moonstone's structured `DataTable`, records loaded on expand.
+- **Export CSV / Export JSON** of a direction's whole history, and **Purge history** (with confirmation).
+- History stored as typed JCR nodes under its own root `/settings/jcustomer-sfdc-connector-history` (new types `jcsfdcnt:historyRoot`, `syncHistory`, `syncRun`, `syncRecord`), with retention from `history.max.runs` / `history.max.records.per.run` / `history.max.value.length`. Scheduled runs that found no change are not recorded; writing history never fails a sync.
+
 ## [2.3.5] - 2026-10-23
 
 ### Fixed
@@ -81,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security hardening: admin actions gated to server/site administrators, same-origin (CSRF) defense, SSRF allow-list on the Salesforce instance URL, SOQL escaping.
 - Salesforce **Lead** object support; README.
 
+[2.4.0]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.4.0
 [2.3.5]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.5
 [2.3.4]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.4
 [2.3.3]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.3

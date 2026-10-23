@@ -1,5 +1,6 @@
 package org.jahia.community.modules.jcustomer.sfdc.sync;
 
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService;
 import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.osgi.BundleUtils;
 import org.jahia.services.scheduler.BackgroundJob;
@@ -118,7 +119,7 @@ public class SfdcSyncJob extends BackgroundJob {
         }
 
         try {
-            syncService.runBatchSync(siteKey, buffer);
+            syncService.runBatchSync(siteKey, buffer, SyncHistoryService.Trigger.SCHEDULED);
             logger.info("[SFDC-Job] ===== Batch sync complete =====");
         } catch (Exception e) {
             logger.error("[SFDC-Job] Batch sync failed", e);

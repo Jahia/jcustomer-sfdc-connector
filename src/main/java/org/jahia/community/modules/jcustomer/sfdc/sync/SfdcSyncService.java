@@ -2,9 +2,15 @@ package org.jahia.community.modules.jcustomer.sfdc.sync;
 
 import org.jahia.community.modules.jcustomer.sfdc.client.SfdcApiClient;
 import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService.Outcome;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService.Run;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService.Trigger;
 import org.jahia.community.modules.jcustomer.sfdc.jcustomer.JCustomerProfileService;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,12 +47,39 @@ public class SfdcSyncService {
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Reference public void setProfileService(JCustomerProfileService s) { this.profileService = s; }
 
+    private volatile SyncHistoryService history;
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
+    public void setHistory(SyncHistoryService h) { this.history = h; }
+    public void unsetHistory(SyncHistoryService h) { this.history = null; }
+
+    /** Starts recording an inbound run, or {@code null} when the history service is unavailable. */
+    private Run startRun(Trigger trigger) {
+        SyncHistoryService h = history;
+        return h != null ? h.start(SyncHistoryService.Direction.INBOUND, trigger) : null;
+    }
+
+    private static void rec(Run run, Outcome outcome, String who, String profileId, String sfObject,
+                            String sfId, Map<String, ?> fields, String message) {
+        if (run != null) run.record(outcome, who, profileId, sfObject, sfId, fields, message);
+    }
+
+    private static void finish(Run run, String status) {
+        if (run != null) run.finish(status);
+    }
+
     // ── Batch sync (called from Quartz job) ───────────────────────────────────
 
-    public void runBatchSync(String siteKey, int deltaBufferMinutes) {
+    /**
+     * Batch sync Salesforce → jCustomer.
+     *
+     * @param trigger what started it (scheduled job or manual "Sync now"), for the history
+     */
+    public void runBatchSync(String siteKey, int deltaBufferMinutes, Trigger trigger) {
+        Run run = startRun(trigger);
         if (siteKey == null || siteKey.isBlank()) {
             logger.error("[SFDC-Sync] Batch sync skipped - no site resolved (see the [SFDC-Site] message)");
             configService.saveSyncState("skipped-no-site", 0, 0);
+            finish(run, "error: no site resolved - set jcustomer.site.key");
             return;
         }
         logger.info("[SFDC-Sync] Starting batch sync for site={}", siteKey);
@@ -61,6 +94,7 @@ public class SfdcSyncService {
             if (contactMappings.isEmpty() && leadMappings.isEmpty()) {
                 logger.warn("[SFDC-Sync] No Contact or Lead mappings configured — nothing to sync");
                 configService.saveSyncState("skipped-no-mapping", 0, 0);
+                finish(run, "skipped: no Contact or Lead mapping configured");
                 return;
             }
 
@@ -74,11 +108,12 @@ public class SfdcSyncService {
 
                 for (Map<String, Object> contact : contacts) {
                     try {
-                        boolean processed = processContact(contact, contactMappings, accountMappings, siteKey);
+                        boolean processed = processContact(contact, contactMappings, accountMappings, siteKey, run);
                         if (processed) updated++; else skipped++;
                     } catch (Exception e) {
                         errors++;
                         logger.error("[SFDC-Sync] Error processing contact {}: {}", contact.get("Id"), e.getMessage());
+                        rec(run, Outcome.ERROR, str(contact, "Email"), null, "Contact", str(contact, "Id"), null, e.getMessage());
                     }
                 }
             }
@@ -93,21 +128,24 @@ public class SfdcSyncService {
 
                 for (Map<String, Object> lead : leads) {
                     try {
-                        boolean processed = processLead(lead, leadMappings, siteKey);
+                        boolean processed = processLead(lead, leadMappings, siteKey, run);
                         if (processed) updated++; else skipped++;
                     } catch (Exception e) {
                         errors++;
                         logger.error("[SFDC-Sync] Error processing lead {}: {}", lead.get("Id"), e.getMessage());
+                        rec(run, Outcome.ERROR, str(lead, "Email"), null, "Lead", str(lead, "Id"), null, e.getMessage());
                     }
                 }
             }
 
             configService.saveSyncState("success", updated, errors);
             logger.info("[SFDC-Sync] Batch complete — updated={}, skipped={}, errors={}", updated, skipped, errors);
+            finish(run, "success");
 
         } catch (Exception e) {
             configService.saveSyncState("error: " + e.getMessage(), updated, errors + 1);
             logger.error("[SFDC-Sync] Batch sync failed", e);
+            finish(run, "error: " + e.getMessage());
         }
     }
 
@@ -120,6 +158,7 @@ public class SfdcSyncService {
             return;
         }
         logger.info("[SFDC-Sync] Login sync triggered for email={} site={}", email, siteKey);
+        Run run = startRun(Trigger.LOGIN);
 
         try {
             List<Map<String, String>> contactMappings = configService.loadMapping("Contact");
@@ -128,6 +167,7 @@ public class SfdcSyncService {
 
             if (contactMappings.isEmpty() && leadMappings.isEmpty()) {
                 logger.info("[SFDC-Sync] Login sync skipped for email={} - no Contact or Lead mapping configured", email);
+                finish(run, "skipped: no Contact or Lead mapping configured");
                 return;
             }
 
@@ -143,7 +183,7 @@ public class SfdcSyncService {
                 List<Map<String, Object>> contacts = apiClient.query(soql);
                 if (!contacts.isEmpty()) {
                     found = true;
-                    updated |= processContact(contacts.get(0), contactMappings, accountMappings, siteKey);
+                    updated |= processContact(contacts.get(0), contactMappings, accountMappings, siteKey, run);
                 }
             }
 
@@ -154,7 +194,7 @@ public class SfdcSyncService {
                 List<Map<String, Object>> leads = apiClient.query(leadSoql);
                 if (!leads.isEmpty()) {
                     found = true;
-                    updated |= processLead(leads.get(0), leadMappings, siteKey);
+                    updated |= processLead(leads.get(0), leadMappings, siteKey, run);
                 }
             }
 
@@ -166,9 +206,12 @@ public class SfdcSyncService {
             } else {
                 logger.info("[SFDC-Sync] Login sync for email={}: no Salesforce Contact or Lead with this email", email);
             }
+            finish(run, "success");
 
         } catch (Exception e) {
             logger.error("[SFDC-Sync] Login sync failed for email={}: {}", email, e.getMessage());
+            rec(run, Outcome.ERROR, email, null, null, null, null, e.getMessage());
+            finish(run, "error: " + e.getMessage());
         }
     }
 
@@ -254,13 +297,14 @@ public class SfdcSyncService {
     private boolean processContact(Map<String, Object> contact,
                                     List<Map<String, String>> contactMappings,
                                     List<Map<String, String>> accountMappings,
-                                    String siteKey) throws Exception {
+                                    String siteKey, Run run) throws Exception {
 
         String contactId = str(contact, "Id");
         String email     = str(contact, "Email");
 
         if (email == null || email.isBlank()) {
             logger.debug("[SFDC-Sync] Skipping contact {} — no email", contactId);
+            rec(run, Outcome.SKIPPED, null, null, "Contact", contactId, null, "no email on the Salesforce record");
             return false;
         }
 
@@ -268,6 +312,7 @@ public class SfdcSyncService {
         Map<String, Object> profile = profileService.findProfile(contactId, email, siteKey);
         if (profile == null) {
             logger.debug("[SFDC-Sync] No jCustomer profile for email={} — skipping (user must login first)", email);
+            rec(run, Outcome.SKIPPED, email, null, "Contact", contactId, null, "no jCustomer profile with this email");
             return false;
         }
 
@@ -301,11 +346,13 @@ public class SfdcSyncService {
 
         if (properties.isEmpty()) {
             logger.debug("[SFDC-Sync] No properties to update for profile {}", profileId);
+            rec(run, Outcome.SKIPPED, email, profileId, "Contact", contactId, null, "no mapped field has a value");
             return false;
         }
 
         profileService.updateProfile(profileId, properties, siteKey);
         logger.debug("[SFDC-Sync] Updated profile {} ({}) — {} properties", profileId, email, properties.size());
+        rec(run, Outcome.UPDATED, email, profileId, "Contact", contactId, properties, null);
         return true;
     }
 
@@ -316,16 +363,19 @@ public class SfdcSyncService {
      */
     private boolean processLead(Map<String, Object> lead,
                                  List<Map<String, String>> leadMappings,
-                                 String siteKey) throws Exception {
+                                 String siteKey, Run run) throws Exception {
 
+        String leadId = str(lead, "Id");
         String email = str(lead, "Email");
         if (email == null || email.isBlank()) {
+            rec(run, Outcome.SKIPPED, null, null, "Lead", leadId, null, "no email on the Salesforce record");
             return false;
         }
 
         Map<String, Object> profile = profileService.findProfile(null, email, siteKey);
         if (profile == null) {
             logger.debug("[SFDC-Sync] No jCustomer profile for lead email={} — skipping", email);
+            rec(run, Outcome.SKIPPED, email, null, "Lead", leadId, null, "no jCustomer profile with this email");
             return false;
         }
 
@@ -342,11 +392,13 @@ public class SfdcSyncService {
 
         if (properties.isEmpty()) {
             logger.debug("[SFDC-Sync] No properties to update for lead profile {}", profileId);
+            rec(run, Outcome.SKIPPED, email, profileId, "Lead", leadId, null, "no mapped field has a value");
             return false;
         }
 
         profileService.updateProfile(profileId, properties, siteKey);
         logger.debug("[SFDC-Sync] Updated profile {} from lead ({}) — {} properties", profileId, email, properties.size());
+        rec(run, Outcome.UPDATED, email, profileId, "Lead", leadId, properties, null);
         return true;
     }
 

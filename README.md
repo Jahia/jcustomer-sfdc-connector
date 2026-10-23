@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.3.5.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.4.0.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.3.5.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.4.0.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -108,6 +108,9 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | `sfdc.batch.size` | `200` | Max records per SOQL page |
 | `sync.delta.buffer.minutes` | `5` | Clock-skew buffer for delta / poll |
 | `outbound.poll.cron` | `0 0/5 * * * ?` | jCustomer to Salesforce poll schedule while *Profile updates* or *Form submissions* is on, unless one is chosen in the Triggers tab. The default lives in the component configuration, so it also applies to existing installs (whose `.cfg` is never rewritten on upgrade). |
+| `history.max.runs` | `100` | Runs kept per direction in the sync history; the oldest are removed beyond it. |
+| `history.max.records.per.run` | `500` | Records detailed per run (counts stay exact; the run is marked truncated beyond it). |
+| `history.max.value.length` | `200` | Field values longer than this are cut in the history. |
 | `sync.on.login` | `true` | Sync a user immediately on login |
 | `jcustomer.site.key` | *(empty: auto-detect)* | Site the connector works for: its jExperience settings select the jCustomer instance and the key used to update profiles, and its **site administrators may manage this connector**. Empty = the single site with the `jexperience` module installed; set it when several sites have jExperience. A value that is not a site on this server is ignored with a warning. Manual runs from the admin UI use the site the UI is open on. |
 | `jcustomer.url` / `jcustomer.username` / `jcustomer.password` | *(unset)* | jCustomer REST access for the property-listing call — supplied per-environment, never committed |
@@ -129,6 +132,10 @@ The config is stored under **typed** node types (namespace `jcsfdcnt`, defined i
 | `outbound/triggers/` | `jcsfdcnt:outboundTriggers` | `outboundObject` (Lead \| Contact), `onProfileUpdate`, `onFormSubmission` (the triggers: the poll runs while one is on), `reconcileCron` (empty = `outbound.poll.cron`); `reconcileEnabled` is legacy (up to 2.3.4) and ignored |
 | `outbound/syncState/` | `jcsfdcnt:syncState` | last outbound run + poll watermark |
 
+### Sync history - stored in JCR (`/settings/jcustomer-sfdc-connector-history`)
+
+Its own root, typed so it is browsable: `jcsfdcnt:historyRoot` → `inbound` / `outbound` (`jcsfdcnt:syncHistory`) → one `jcsfdcnt:syncRun` per run (trigger, status, start/end, created/updated/skipped/error counts) → one `jcsfdcnt:syncRecord` per record (outcome, email, profile id, Salesforce object and id, fields written, message). It holds personal data (emails and field values) copied from both systems: retention is bounded by `history.max.*` and the **Purge history** button.
+
 **Migration from earlier versions:** releases before 2.2.0 stored this config as `nt:unstructured`. The one-time patch `migration/2100-migrate-config-to-typed.groovy` converts an existing `/settings/jcustomer-sfdc-connector` subtree to the typed node types. Deploy the 2.2.0+ jar first (so the CND is registered), then drop the patch into `<jahia>/patches/groovy/`; the Jahia Patcher runs it once and renames it `.installed`. It is idempotent and reads tolerantly of the legacy layout, so re-running or running on an already-typed config is a no-op.
 
 ---
@@ -142,6 +149,13 @@ jContent → **Administration → SF Connector** (route `/sfdc-connector`). Thre
 - **jCustomer → SFDC**: Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + the triggers (*Profile updates* / *Form submissions*: turning one on starts the automatic push) + Schedule (how often jCustomer is polled, every 5 minutes by default) + "Sync now" · last outbound run.
 
 In the Field Mapping tabs, the jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown lists the object's fields; both are sorted **alphabetically**.
+
+### History
+
+Each direction has a **History** tab: one row per run (when, trigger: *Scheduled*, *Sync now*, *Login*, *Manual push*; result counts), built with Moonstone's structured `DataTable`. Expanding a run loads its records: who (email, profile id), outcome (created / updated / skipped / error), the Salesforce record, the fields written, and why a record was skipped or failed. Scheduled runs that found no change are not recorded, so a frequent poll does not bury the useful runs; manual runs are always recorded.
+
+- **Export CSV / Export JSON** download the whole history of the direction: CSV has one line per record with its run's columns (a run without records gets one line); JSON keeps runs with their `records`.
+- **Purge history** deletes every recorded run of the direction, after a confirmation.
 
 ### Exporting a mapping
 

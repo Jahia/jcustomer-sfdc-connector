@@ -1,5 +1,6 @@
 package org.jahia.community.modules.jcustomer.sfdc.actions;
 
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService;
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
 import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
@@ -46,7 +47,7 @@ public class TriggerSyncAction extends AbstractSfdcAdminAction {
         Thread t = new Thread(() -> {
             SfdcSyncService syncService = BundleUtils.getOsgiService(SfdcSyncService.class, null);
             if (syncService != null) {
-                syncService.runBatchSync(siteKey, 0); // 0 = full sync (ignore lastSyncAt)
+                syncService.runBatchSync(siteKey, 0, SyncHistoryService.Trigger.MANUAL); // 0 = full sync (ignore lastSyncAt)
             }
         });
         t.setName("sfdc-manual-sync");

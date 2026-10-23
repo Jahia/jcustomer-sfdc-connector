@@ -66,3 +66,33 @@
  + triggers (jcsfdcnt:triggers)
  + syncState (jcsfdcnt:syncState)
  + outbound (jcsfdcnt:outbound)
+
+// Sync history, under its own root /settings/jcustomer-sfdc-connector-history.
+// One node per run of a sync direction, one child per record it touched.
+[jcsfdcnt:syncRecord] > jnt:content
+ - outcome (string) < 'created', 'updated', 'skipped', 'error'
+ - who (string)
+ - profileId (string)
+ - sfObject (string)
+ - sfId (string)
+ - fields (string) multiple
+ - message (string)
+
+[jcsfdcnt:syncRun] > jnt:content
+ - trigger (string) < 'scheduled', 'manual', 'login', 'push'
+ - status (string)
+ - startedAt (date)
+ - finishedAt (date)
+ - createdCount (long)
+ - updatedCount (long)
+ - skippedCount (long)
+ - errorCount (long)
+ - truncated (boolean)
+ + * (jcsfdcnt:syncRecord)
+
+[jcsfdcnt:syncHistory] > jnt:content
+ + * (jcsfdcnt:syncRun)
+
+[jcsfdcnt:historyRoot] > jnt:content
+ + inbound (jcsfdcnt:syncHistory)
+ + outbound (jcsfdcnt:syncHistory)

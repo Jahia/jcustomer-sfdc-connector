@@ -61,3 +61,11 @@ export const getOutboundSyncState = ()            => post('getOutboundSyncState'
 export const getOutboundTriggers      = ()        => post('getOutboundTriggers');
 export const saveOutboundTriggers     = body      => post('saveOutboundTriggers', body);
 export const triggerOutboundReconcile = ()        => post('triggerOutboundReconcile', {}, siteQuery());
+
+// Sync history (direction: 'inbound' | 'outbound')
+const directionQuery = (direction, extra = {}) =>
+    '?' + new URLSearchParams({ direction, ...extra }).toString();
+export const getSyncHistory    = direction        => post('getSyncHistory', null, directionQuery(direction));
+export const getSyncHistoryRun = (direction, run) => post('getSyncHistoryRun', null, directionQuery(direction, { runId: run }));
+export const exportSyncHistory = direction        => post('getSyncHistory', null, directionQuery(direction, { includeRecords: 'true' }));
+export const purgeSyncHistory  = direction        => post('purgeSyncHistory', null, directionQuery(direction));

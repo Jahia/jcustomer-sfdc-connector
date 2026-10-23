@@ -5,9 +5,10 @@ import { Loader, Tab, TabItem } from '@jahia/moonstone';
 const OutboundMappingTab  = lazy(() => import('./OutboundMappingTab'));
 const OutboundTriggersTab = lazy(() => import('./OutboundTriggersTab'));
 const OutboundSyncTab     = lazy(() => import('./OutboundSyncTab'));
+const HistoryTab          = lazy(() => import('./HistoryTab'));
 
 const NS = 'jcustomer-sfdc-connector';
-const SUB = ['mapping', 'triggers', 'sync'];
+const SUB = ['mapping', 'triggers', 'sync', 'history'];
 
 /** jCustomer → SFDC (outbound) — Lead field mapping + push/synchronisation. */
 export default function OutboundPanel() {
@@ -29,6 +30,7 @@ export default function OutboundPanel() {
                     {sub === 'mapping'  && <OutboundMappingTab />}
                     {sub === 'triggers' && <OutboundTriggersTab />}
                     {sub === 'sync'     && <OutboundSyncTab />}
+                    {sub === 'history'  && <HistoryTab direction="outbound" />}
                 </Suspense>
             </div>
         </div>

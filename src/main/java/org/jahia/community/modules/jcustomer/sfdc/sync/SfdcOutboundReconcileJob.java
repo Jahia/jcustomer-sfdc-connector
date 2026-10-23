@@ -1,5 +1,6 @@
 package org.jahia.community.modules.jcustomer.sfdc.sync;
 
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService;
 import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
 import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.osgi.BundleUtils;
@@ -38,7 +39,8 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
 
     private static final String JOB_NAME     = "jCustomer - SFDC Outbound Reconcile";
     private static final String TRIGGER_NAME = "SfdcOutboundReconcileTrigger";
-    private static final int    MAX_PROFILES = 500;
+    /** Safety cap on profiles pushed per poll (scheduled or manual). */
+    public static final int MAX_PROFILES = 500;
     private static final String KEY_DELTA_BUFFER = "deltaBuffer";
 
     @interface Config {
@@ -126,6 +128,6 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
         int buffer = ctx.getJobDetail().getJobDataMap().containsKey(KEY_DELTA_BUFFER)
                 ? ctx.getJobDetail().getJobDataMap().getIntValue(KEY_DELTA_BUFFER) : 5;
         SiteKeyResolver resolver = BundleUtils.getOsgiService(SiteKeyResolver.class, null);
-        svc.runReconcile(resolver != null ? resolver.resolve() : null, buffer, MAX_PROFILES);
+        svc.runReconcile(resolver != null ? resolver.resolve() : null, buffer, MAX_PROFILES, SyncHistoryService.Trigger.SCHEDULED);
     }
 }
