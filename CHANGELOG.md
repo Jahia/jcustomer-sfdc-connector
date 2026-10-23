@@ -4,6 +4,16 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-10-23
+
+### Fixed
+- `sfdc.api.version` from the OSGi configuration was documented but never read: the API version was hardcoded in the API client, the configuration service, the CND default and the admin UI. It now has one source: the Connection's value when set, else `sfdc.api.version`. A missing version raises a clear error instead of a guessed value.
+- Connection tab: labels, placeholders and hints were hardcoded in the code, some in French for every language. They now come from the EN/FR locale files.
+- Connection tab: the key guidance said "PKCS#8 or PKCS#1" and showed a PKCS#1 header, but only **PKCS#8** keys work. The hint now names PKCS#8 and gives the `openssl pkcs8 -topk8 -nocrypt` conversion.
+
+### Changed
+- The API version field stays empty unless set, and shows the configured `sfdc.api.version` as its placeholder, so saving the form no longer pins the default on the connection.
+
 ## [2.3.3] - 2026-10-23
 
 ### Fixed
@@ -58,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security hardening: admin actions gated to server/site administrators, same-origin (CSRF) defense, SSRF allow-list on the Salesforce instance URL, SOQL escaping.
 - Salesforce **Lead** object support; README.
 
+[2.3.4]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.4
 [2.3.3]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.3
 [2.3.2]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.2
 [2.3.1]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.1

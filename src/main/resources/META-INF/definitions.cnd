@@ -12,7 +12,7 @@
  - clientId (string)
  - sfUsername (string)
  - privateKey (string)
- - apiVersion (string) = 'v66.0'
+ - apiVersion (string)
  - enabled (boolean) = false
 
 // One field mapping entry: jCustomer property to Salesforce field. Shared by inbound and outbound.

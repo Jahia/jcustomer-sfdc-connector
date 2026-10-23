@@ -54,7 +54,7 @@ export default function OutboundSyncTab() {
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', maxWidth: 560, marginTop: 16 }}>
                 <div style={{ flex: 1 }}>
                     <Typography variant="caption" weight="semiBold">{t(`${NS}:outbound.sync.emailLabel`)}</Typography>
-                    <Input value={email} type="email" placeholder="user@example.com"
+                    <Input value={email} type="email" placeholder={t(`${NS}:outbound.sync.emailPlaceholder`)}
                         onChange={e => setEmail(e.target.value)} />
                 </div>
                 <Button variant="default" color="accent"

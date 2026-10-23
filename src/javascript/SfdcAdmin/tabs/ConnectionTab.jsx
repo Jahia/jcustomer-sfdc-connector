@@ -6,18 +6,15 @@ import classes from './ConnectionTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
 
-const EMPTY = { instanceUrl: '', clientId: '', sfUsername: '', apiVersion: 'v66.0', privateKey: '', enabled: 'true' };
+const EMPTY = { instanceUrl: '', clientId: '', sfUsername: '', apiVersion: '', privateKey: '', enabled: 'true' };
 
-const FIELDS = [
-    { key: 'instanceUrl', label: 'Instance URL',             placeholder: 'https://yourorg.my.salesforce.com' },
-    { key: 'clientId',    label: 'Client ID (Consumer Key)', placeholder: '3MVG9...' },
-    { key: 'sfUsername',  label: 'SF API Username',          placeholder: 'api@yourorg.com' },
-    { key: 'apiVersion',  label: 'API Version',              placeholder: 'v66.0' },
-];
+// Labels and placeholders come from the locale files (connection.field.<key>.*).
+const FIELDS = ['instanceUrl', 'clientId', 'sfUsername', 'apiVersion'];
 
 export default function ConnectionTab() {
     const { t } = useTranslation(NS);
     const [form,       setForm]       = useState(EMPTY);
+    const [apiVersionDefault, setApiVersionDefault] = useState('');
     const [pkStored,   setPkStored]   = useState(false);
     const [loading,    setLoading]    = useState(true);
     const [saving,     setSaving]     = useState(false);
@@ -33,10 +30,11 @@ export default function ConnectionTab() {
                     instanceUrl: data.instanceUrl || '',
                     clientId:    data.clientId    || '',
                     sfUsername:  data.sfUsername   || '',
-                    apiVersion:  data.apiVersion   || 'v66.0',
+                    apiVersion:  data.apiVersion   || '',
                     privateKey:  '',
                     enabled:     data.enabled !== undefined ? String(data.enabled) : 'true',
                 });
+                setApiVersionDefault(data.apiVersionDefault || '');
                 setPkStored(!!data.privateKeyStored);
             } catch (_) {}
             finally { setLoading(false); }
@@ -77,31 +75,38 @@ export default function ConnectionTab() {
 
             <Separator />
 
-            {FIELDS.map(f => (
-                <div key={f.key} className={classes.field}>
-                    <label className={classes.label}>{f.label}</label>
+            {FIELDS.map(key => (
+                <div key={key} className={classes.field}>
+                    <label className={classes.label}>{t(`${NS}:connection.field.${key}.label`)}</label>
                     <Input
-                        value={form[f.key] || ''}
-                        placeholder={f.placeholder}
-                        onChange={e => set(f.key, e.target.value)}
+                        value={form[key] || ''}
+                        placeholder={key === 'apiVersion' && apiVersionDefault
+                            ? apiVersionDefault
+                            : t(`${NS}:connection.field.${key}.placeholder`)}
+                        onChange={e => set(key, e.target.value)}
                     />
+                    {key === 'apiVersion' && apiVersionDefault && (
+                        <Typography variant="caption" className={classes.hint}>
+                            {t(`${NS}:connection.field.apiVersion.hint`, { version: apiVersionDefault })}
+                        </Typography>
+                    )}
                 </div>
             ))}
 
             <div className={classes.field}>
-                <label className={classes.label}>Private Key (PEM)</label>
+                <label className={classes.label}>{t(`${NS}:connection.field.privateKey.label`)}</label>
                 <textarea
                     className={classes.textarea}
                     rows={8}
                     value={form.privateKey || ''}
                     placeholder={pkStored
-                        ? '★ Clé déjà stockée — collez un nouveau PEM pour remplacer'
-                        : '-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----'}
+                        ? t(`${NS}:connection.field.privateKey.placeholderStored`)
+                        : t(`${NS}:connection.field.privateKey.placeholder`)}
                     onChange={e => set('privateKey', e.target.value)}
                 />
                 {pkStored && !form.privateKey && (
                     <Typography variant="caption" className={classes.hint}>
-                        ✓ Clé privée stockée — laisser vide pour conserver
+                        {t(`${NS}:connection.field.privateKey.stored`)}
                     </Typography>
                 )}
             </div>
