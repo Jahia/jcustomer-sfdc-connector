@@ -7,6 +7,8 @@ import classes from './MappingTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
 const SFDC_OBJECTS = ['Lead', 'Contact'];             // outbound targets
+// Case-insensitive sort of dropdown options by their visible label.
+const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
 const REQUIRED_TO_CREATE = { Lead: ['LastName', 'Company'], Contact: ['LastName'] };
 const emptyByObject = () => SFDC_OBJECTS.reduce((a, o) => ({ ...a, [o]: [] }), {});
 
@@ -72,8 +74,8 @@ export default function OutboundMappingTab() {
             : { ok: true, text: t(`${NS}:mapping.export.done`, { obj: sfObject, count: n, fmt: fmt.toUpperCase() }) });
     };
 
-    const jcOptions   = jcProps.map(p => ({ label: `${p.name}${p.multivalued ? ' [multi]' : ''}`, value: p.id }));
-    const sfOptions   = (sfFields[sfObject] || []).map(f => ({ label: `${f.label || f.name} (${f.name})`, value: f.name }));
+    const jcOptions   = jcProps.map(p => ({ label: `${p.name}${p.multivalued ? ' [multi]' : ''}`, value: p.id })).sort(byLabel);
+    const sfOptions   = (sfFields[sfObject] || []).map(f => ({ label: `${f.label || f.name} (${f.name})`, value: f.name })).sort(byLabel);
     const currentRows = mappings[sfObject] || [];
     const mappedFields = new Set(currentRows.map(r => r.sfField));
     const missingRequired = (REQUIRED_TO_CREATE[sfObject] || []).filter(f => !mappedFields.has(f));

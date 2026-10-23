@@ -7,6 +7,8 @@ import classes from './MappingTab.module.css';
 
 const NS = 'jcustomer-sfdc-connector';
 const SFDC_OBJECTS = ['Contact', 'Account', 'Lead'];
+// Case-insensitive sort of dropdown options by their visible label.
+const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
 const emptyByObject = () => SFDC_OBJECTS.reduce((acc, o) => ({ ...acc, [o]: [] }), {});
 const byObject = (data, pick) => SFDC_OBJECTS.reduce(
     (acc, o) => ({ ...acc, [o]: Array.isArray(pick(data, o)) ? pick(data, o) : [] }), {});
@@ -88,9 +90,9 @@ export default function MappingTab() {
     const buildSfOptions = obj => (sfFields[obj] || []).map(f => ({
         label: `${f.label || f.name} (${f.name})`,
         value: obj === 'Account' && !f.name.startsWith('Account.') ? `Account.${f.name}` : f.name
-    }));
+    })).sort(byLabel);
 
-    const jcOptions     = jcProps.map(p => ({ label: `${p.name}${p.multivalued ? ' [multi]' : ''}`, value: p.id }));
+    const jcOptions     = jcProps.map(p => ({ label: `${p.name}${p.multivalued ? ' [multi]' : ''}`, value: p.id })).sort(byLabel);
     const currentRows   = mappings[sfObject] || [];
     const sfDropOptions = buildSfOptions(sfObject);
 
