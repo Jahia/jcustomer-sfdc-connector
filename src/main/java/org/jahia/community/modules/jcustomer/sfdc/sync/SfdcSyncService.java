@@ -44,6 +44,11 @@ public class SfdcSyncService {
     // ── Batch sync (called from Quartz job) ───────────────────────────────────
 
     public void runBatchSync(String siteKey, int deltaBufferMinutes) {
+        if (siteKey == null || siteKey.isBlank()) {
+            logger.error("[SFDC-Sync] Batch sync skipped - no site resolved (see the [SFDC-Site] message)");
+            configService.saveSyncState("skipped-no-site", 0, 0);
+            return;
+        }
         logger.info("[SFDC-Sync] Starting batch sync for site={}", siteKey);
         long updated = 0, skipped = 0, errors = 0;
 
@@ -110,17 +115,25 @@ public class SfdcSyncService {
 
     public void syncForEmail(String email, String siteKey) {
         if (email == null || email.isBlank()) return;
-        logger.info("[SFDC-Sync] Login sync triggered for email={}", email);
+        if (siteKey == null || siteKey.isBlank()) {
+            logger.error("[SFDC-Sync] Login sync skipped for email={} - no site resolved (see the [SFDC-Site] message)", email);
+            return;
+        }
+        logger.info("[SFDC-Sync] Login sync triggered for email={} site={}", email, siteKey);
 
         try {
             List<Map<String, String>> contactMappings = configService.loadMapping("Contact");
             List<Map<String, String>> accountMappings = configService.loadMapping("Account");
             List<Map<String, String>> leadMappings    = configService.loadMapping("Lead");
 
-            if (contactMappings.isEmpty() && leadMappings.isEmpty()) return;
+            if (contactMappings.isEmpty() && leadMappings.isEmpty()) {
+                logger.info("[SFDC-Sync] Login sync skipped for email={} - no Contact or Lead mapping configured", email);
+                return;
+            }
 
             String escapedEmail = soqlEscape(email);
-            boolean matched = false;
+            boolean found   = false;   // a Salesforce record exists for this email
+            boolean updated = false;   // a jCustomer profile was actually updated
 
             // Contact first (a converted lead is a Contact) — escape the email before interpolating
             // it into the SOQL string literal (SOQL injection guard; email comes from a login event).
@@ -129,8 +142,8 @@ public class SfdcSyncService {
                     " AND Email = '" + escapedEmail + "'";
                 List<Map<String, Object>> contacts = apiClient.query(soql);
                 if (!contacts.isEmpty()) {
-                    processContact(contacts.get(0), contactMappings, accountMappings, siteKey);
-                    matched = true;
+                    found = true;
+                    updated |= processContact(contacts.get(0), contactMappings, accountMappings, siteKey);
                 }
             }
 
@@ -140,15 +153,18 @@ public class SfdcSyncService {
                     " AND Email = '" + escapedEmail + "'";
                 List<Map<String, Object>> leads = apiClient.query(leadSoql);
                 if (!leads.isEmpty()) {
-                    processLead(leads.get(0), leadMappings, siteKey);
-                    matched = true;
+                    found = true;
+                    updated |= processLead(leads.get(0), leadMappings, siteKey);
                 }
             }
 
-            if (matched) {
-                logger.info("[SFDC-Sync] Login sync complete for email={}", email);
+            if (updated) {
+                logger.info("[SFDC-Sync] Login sync complete for email={} - jCustomer profile updated", email);
+            } else if (found) {
+                logger.info("[SFDC-Sync] Login sync for email={}: Salesforce record found but nothing updated - "
+                        + "no jCustomer profile with this email, or no mapped field has a value", email);
             } else {
-                logger.debug("[SFDC-Sync] No SF contact or lead found for email={}", email);
+                logger.info("[SFDC-Sync] Login sync for email={}: no Salesforce Contact or Lead with this email", email);
             }
 
         } catch (Exception e) {

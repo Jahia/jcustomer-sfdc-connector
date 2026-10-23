@@ -2,7 +2,7 @@ package org.jahia.community.modules.jcustomer.sfdc.actions;
 
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
-import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.community.modules.jcustomer.sfdc.sync.SfdcSyncService;
 import org.jahia.osgi.BundleUtils;
 import org.jahia.services.content.JCRSessionWrapper;
@@ -19,13 +19,14 @@ import java.util.Map;
 
 /**
  * Triggers an immediate batch sync from the admin UI.
- * POST *.triggerSync.do → { status: "started" } (async)
+ * POST *.triggerSync.do?siteKey=&lt;site the admin UI is open on&gt; → { status: "started", siteKey } (async)
+ * The site is resolved by {@link SiteKeyResolver}; 409 when none can be determined.
  */
 @Component(service = Action.class, immediate = true)
 public class TriggerSyncAction extends AbstractSfdcAdminAction {
 
-    private ConnectorConfigService configService;
-    @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
+    private SiteKeyResolver siteKeyResolver;
+    @Reference public void setSiteKeyResolver(SiteKeyResolver r) { this.siteKeyResolver = r; }
     @Override public String getName() { return "triggerSync"; }
 
     @Override
@@ -34,9 +35,12 @@ public class TriggerSyncAction extends AbstractSfdcAdminAction {
                                    URLResolver url) throws Exception {
 
         List<String> siteKeyParam = params.getOrDefault("siteKey", List.of());
-        String siteKey = siteKeyParam.isEmpty()
-            ? configService.loadConnection().getOrDefault("siteKey", "mysoprahr")
-            : siteKeyParam.get(0);
+        String siteKey = siteKeyResolver.resolve(siteKeyParam.isEmpty() ? null : siteKeyParam.get(0));
+        if (siteKey == null) {
+            GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject()
+                .put("error", "No site resolved - set jcustomer.site.key in org.jahia.community.jcustomer.sfdc").toString(), 409);
+            return ActionResult.OK;
+        }
 
         // Run async so the HTTP response returns immediately
         Thread t = new Thread(() -> {

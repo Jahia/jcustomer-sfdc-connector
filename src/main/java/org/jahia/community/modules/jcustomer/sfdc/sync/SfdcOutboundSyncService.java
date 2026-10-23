@@ -58,6 +58,10 @@ public class SfdcOutboundSyncService {
      */
     public boolean pushForEmail(String email, String siteKey) {
         if (email == null || email.isBlank()) return false;
+        if (siteKey == null || siteKey.isBlank()) {
+            logger.error("[SFDC-Outbound] Push skipped for email={} - no site resolved (see the [SFDC-Site] message)", email);
+            return false;
+        }
         logger.info("[SFDC-Outbound] Push triggered for email={}", email);
         try {
             Map<String, Object> profile = profileService.findProfile(null, email, siteKey);
@@ -89,6 +93,10 @@ public class SfdcOutboundSyncService {
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     public void runReconcile(String siteKey, int bufferMinutes, int maxProfiles) {
+        if (siteKey == null || siteKey.isBlank()) {
+            logger.error("[SFDC-Outbound] Reconcile skipped - no site resolved (see the [SFDC-Site] message)");
+            return;
+        }
         long updated = 0, created = 0, errors = 0;
         Instant runStart = Instant.now();
         try {
@@ -220,7 +228,14 @@ public class SfdcOutboundSyncService {
         // Persist the record id back onto the profile for future idempotent pushes
         if (recordId != null && !recordId.isBlank() && profileId != null
                 && !recordId.equals(asString(props.get(idProp)))) {
-            profileService.updateProfile(profileId, Map.of(idProp, recordId), siteKey);
+            try {
+                profileService.updateProfile(profileId, Map.of(idProp, recordId), siteKey);
+            } catch (Exception e) {
+                // The Salesforce write succeeded; only the id writeback failed. Matching by email still
+                // works on the next push, so report it without failing this one.
+                logger.warn("[SFDC-Outbound] {} {} saved, but writing {} back to profile {} failed: {}",
+                        object, recordId, idProp, profileId, e.getMessage());
+            }
         }
         return created;
     }

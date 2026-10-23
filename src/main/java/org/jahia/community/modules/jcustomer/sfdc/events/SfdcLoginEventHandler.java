@@ -1,6 +1,7 @@
 package org.jahia.community.modules.jcustomer.sfdc.events;
 
 import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.community.modules.jcustomer.sfdc.sync.SfdcSyncService;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
@@ -25,7 +26,7 @@ import java.util.Arrays;
  * The sync runs on a daemon thread so the login is never delayed.
  *
  * Event topic: org/jahia/usersgroups/login/LOGIN
- * Config:  sync.on.login=true (default), jcustomer.site.key
+ * Config:  sync.on.login=true (default). The site comes from {@link SiteKeyResolver}.
  */
 @Component(
     service = EventHandler.class,
@@ -38,24 +39,26 @@ public class SfdcLoginEventHandler implements EventHandler {
     private static final Logger logger = LoggerFactory.getLogger(SfdcLoginEventHandler.class);
 
     @interface Config {
-        boolean sync_on_login()      default true;
-        String  jcustomer_site_key() default "mysoprahr";
+        boolean sync_on_login() default true;
     }
 
     private volatile boolean defaultEnabled = true;
-    private volatile String  siteKey        = "mysoprahr";
 
     private volatile ConnectorConfigService configService;
+    private volatile SiteKeyResolver        siteKeyResolver;
 
     @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
     public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     public void unsetConfigService(ConnectorConfigService s) { this.configService = null; }
 
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
+    public void setSiteKeyResolver(SiteKeyResolver r) { this.siteKeyResolver = r; }
+    public void unsetSiteKeyResolver(SiteKeyResolver r) { this.siteKeyResolver = null; }
+
     @Activate
     public void activate(Config config) {
         this.defaultEnabled = config.sync_on_login();
-        this.siteKey        = config.jcustomer_site_key();
-        logger.info("[SFDC-Login] Handler activated — defaultEnabled={}, site={}", defaultEnabled, siteKey);
+        logger.info("[SFDC-Login] Handler activated - defaultEnabled={}", defaultEnabled);
     }
 
     /** Reads loginEnabled from JCR triggers config (falls back to OSGi default). */
@@ -137,7 +140,6 @@ public class SfdcLoginEventHandler implements EventHandler {
 
             // ── Fire async sync ───────────────────────────────────────────────
             final String userEmail = email;
-            final String site      = this.siteKey;
 
             Thread t = new Thread(() -> {
                 try {
@@ -146,7 +148,9 @@ public class SfdcLoginEventHandler implements EventHandler {
                         logger.warn("[SFDC-Login] SfdcSyncService not available");
                         return;
                     }
-                    logger.info("[SFDC-Login] Starting login sync for {}", userEmail);
+                    SiteKeyResolver resolver = siteKeyResolver;
+                    String site = resolver != null ? resolver.resolve() : null;
+                    logger.info("[SFDC-Login] Starting login sync for {} (site={})", userEmail, site);
                     syncService.syncForEmail(userEmail, site);
                 } catch (Exception e) {
                     logger.error("[SFDC-Login] Async sync failed for {}: {}", userEmail, e.getMessage());

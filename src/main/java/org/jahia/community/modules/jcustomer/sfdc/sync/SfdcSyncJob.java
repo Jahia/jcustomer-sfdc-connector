@@ -1,5 +1,6 @@
 package org.jahia.community.modules.jcustomer.sfdc.sync;
 
+import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.osgi.BundleUtils;
 import org.jahia.services.scheduler.BackgroundJob;
 import org.jahia.services.scheduler.SchedulerService;
@@ -18,7 +19,8 @@ import org.slf4j.LoggerFactory;
  * Quartz job for scheduled batch sync of Salesforce data into jCustomer.
  *
  * Config flows through JobDataMap (Quartz creates new instances per execution —
- * instance fields from @Activate are NOT available in executeJahiaJob).
+ * instance fields from @Activate are NOT available in executeJahiaJob). The site is resolved at
+ * execution time through {@link SiteKeyResolver}.
  */
 @Component(
     service = SfdcSyncJob.class,
@@ -32,12 +34,10 @@ public class SfdcSyncJob extends BackgroundJob {
     private static final String JOB_NAME     = "jCustomer - SFDC Connector Sync";
     private static final String TRIGGER_NAME = "SfdcSyncTrigger";
 
-    private static final String KEY_SITE_KEY     = "siteKey";
     private static final String KEY_DELTA_BUFFER = "deltaBuffer";
 
     @interface Config {
         String scheduler_cron()             default "0 0 5 * * ?";
-        String jcustomer_site_key()         default "mysoprahr";
         int    sync_delta_buffer_minutes()  default 5;
     }
 
@@ -49,11 +49,10 @@ public class SfdcSyncJob extends BackgroundJob {
 
     @Activate
     public void activate(Config config) throws Exception {
-        final String siteKey    = config.jcustomer_site_key();
         final int    buffer     = config.sync_delta_buffer_minutes();
         final String cron       = config.scheduler_cron();
 
-        logger.info("[SFDC-Job] Activating — site={}, cron={}, buffer={}min", siteKey, cron, buffer);
+        logger.info("[SFDC-Job] Activating - cron={}, buffer={}min", cron, buffer);
 
         if (!SettingsBean.getInstance().isProcessingServer()) {
             logger.info("[SFDC-Job] Not a processing server — skipping scheduler");
@@ -61,7 +60,6 @@ public class SfdcSyncJob extends BackgroundJob {
         }
 
         jobDetail = BackgroundJob.createJahiaJob(JOB_NAME, SfdcSyncJob.class);
-        jobDetail.getJobDataMap().put(KEY_SITE_KEY,     siteKey);
         jobDetail.getJobDataMap().put(KEY_DELTA_BUFFER, buffer);
 
         try { schedulerService.getScheduler().unscheduleJob(TRIGGER_NAME, jobDetail.getGroup()); }
@@ -109,8 +107,9 @@ public class SfdcSyncJob extends BackgroundJob {
     public void executeJahiaJob(JobExecutionContext ctx) {
         logger.info("[SFDC-Job] ===== Batch sync firing at {} =====", ctx.getFireTime());
 
-        final String siteKey = ctx.getJobDetail().getJobDataMap().getString(KEY_SITE_KEY);
         final int    buffer  = ctx.getJobDetail().getJobDataMap().getIntValue(KEY_DELTA_BUFFER);
+        SiteKeyResolver resolver = BundleUtils.getOsgiService(SiteKeyResolver.class, null);
+        final String siteKey = resolver != null ? resolver.resolve() : null;
 
         SfdcSyncService syncService = BundleUtils.getOsgiService(SfdcSyncService.class, null);
         if (syncService == null) {

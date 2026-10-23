@@ -2,6 +2,7 @@ package org.jahia.community.modules.jcustomer.sfdc.actions;
 
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
+import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.community.modules.jcustomer.sfdc.sync.SfdcOutboundSyncService;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.render.RenderContext;
@@ -19,26 +20,26 @@ import java.util.Map;
 
 /**
  * Runs the outbound reconcile immediately (pushes profiles changed since the last run to Salesforce).
- * POST *.triggerOutboundReconcile.do → { status: "started" } (async)
+ * POST *.triggerOutboundReconcile.do?siteKey=&lt;site the admin UI is open on&gt; → { status: "started", siteKey }
+ * (async). The site is resolved by {@link SiteKeyResolver}; 409 when none can be determined.
  */
 @Component(service = Action.class, immediate = true, configurationPid = "org.jahia.community.jcustomer.sfdc")
 public class TriggerOutboundReconcileAction extends AbstractSfdcAdminAction {
 
     @interface Config {
-        String jcustomer_site_key()        default "mysoprahr";
-        int    sync_delta_buffer_minutes() default 5;
+        int sync_delta_buffer_minutes() default 5;
     }
 
-    private volatile String siteKey = "mysoprahr";
-    private volatile int    buffer  = 5;
+    private volatile int buffer = 5;
 
     private SfdcOutboundSyncService outboundService;
+    private SiteKeyResolver         siteKeyResolver;
     @Reference public void setOutboundService(SfdcOutboundSyncService s) { this.outboundService = s; }
+    @Reference public void setSiteKeyResolver(SiteKeyResolver r) { this.siteKeyResolver = r; }
 
     @Activate @Modified
     public void activate(Config config) {
-        this.siteKey = config.jcustomer_site_key();
-        this.buffer  = config.sync_delta_buffer_minutes();
+        this.buffer = config.sync_delta_buffer_minutes();
     }
 
     @Override public String getName() { return "triggerOutboundReconcile"; }
@@ -47,13 +48,20 @@ public class TriggerOutboundReconcileAction extends AbstractSfdcAdminAction {
     protected ActionResult doAuthorizedExecute(HttpServletRequest req, RenderContext ctx, Resource res,
                                    JCRSessionWrapper session, Map<String, List<String>> params,
                                    URLResolver url) throws Exception {
-        final String site = siteKey;
+        List<String> siteKeyParam = params.getOrDefault("siteKey", List.of());
+        final String site = siteKeyResolver.resolve(siteKeyParam.isEmpty() ? null : siteKeyParam.get(0));
+        if (site == null) {
+            GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject()
+                .put("error", "No site resolved - set jcustomer.site.key in org.jahia.community.jcustomer.sfdc").toString(), 409);
+            return ActionResult.OK;
+        }
         final int buf = buffer;
         Thread t = new Thread(() -> outboundService.runReconcile(site, buf, 500));
         t.setName("sfdc-outbound-reconcile");
         t.setDaemon(true);
         t.start();
-        GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("status", "started").toString());
+        GetSfdcFieldsAction.write(ctx.getResponse(),
+            new JSONObject().put("status", "started").put("siteKey", site).toString());
         return ActionResult.OK;
     }
 }

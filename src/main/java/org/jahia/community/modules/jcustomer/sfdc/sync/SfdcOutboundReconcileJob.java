@@ -1,6 +1,7 @@
 package org.jahia.community.modules.jcustomer.sfdc.sync;
 
 import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.osgi.BundleUtils;
 import org.jahia.services.scheduler.BackgroundJob;
 import org.jahia.services.scheduler.SchedulerService;
@@ -24,6 +25,10 @@ import java.util.Map;
  *
  * <p>Enabled/cron come from the outbound trigger config in JCR ({@code reconcileEnabled} /
  * {@code reconcileCron}); {@link #reschedule()} is called when that config is saved.
+ *
+ * <p>Quartz creates a new instance per execution, so nothing set on this instance by {@code @Activate}
+ * is visible in {@link #executeJahiaJob}: the buffer travels in the JobDataMap and the site is
+ * resolved at execution time through {@link SiteKeyResolver}.
  */
 @Component(service = SfdcOutboundReconcileJob.class, immediate = true,
         configurationPid = "org.jahia.community.jcustomer.sfdc")
@@ -34,9 +39,9 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
     private static final String JOB_NAME     = "jCustomer - SFDC Outbound Reconcile";
     private static final String TRIGGER_NAME = "SfdcOutboundReconcileTrigger";
     private static final int    MAX_PROFILES = 500;
+    private static final String KEY_DELTA_BUFFER = "deltaBuffer";
 
     @interface Config {
-        String jcustomer_site_key()        default "mysoprahr";
         int    sync_delta_buffer_minutes() default 5;
     }
 
@@ -45,19 +50,16 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
     @Reference public void setSchedulerService(SchedulerService s)   { this.schedulerService = s; }
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
 
-    private volatile String siteKey = "mysoprahr";
-    private volatile int    buffer  = 5;
     private JobDetail jobDetail;
 
     @Activate
     public void activate(Config config) throws Exception {
-        this.siteKey = config.jcustomer_site_key();
-        this.buffer  = config.sync_delta_buffer_minutes();
         if (!SettingsBean.getInstance().isProcessingServer()) {
             logger.info("[SFDC-Reconcile] Not a processing server — skipping scheduler");
             return;
         }
         jobDetail = BackgroundJob.createJahiaJob(JOB_NAME, SfdcOutboundReconcileJob.class);
+        jobDetail.getJobDataMap().put(KEY_DELTA_BUFFER, config.sync_delta_buffer_minutes());
         applySchedule();
     }
 
@@ -103,6 +105,9 @@ public class SfdcOutboundReconcileJob extends BackgroundJob {
             logger.error("[SFDC-Reconcile] SfdcOutboundSyncService not available — aborting");
             return;
         }
-        svc.runReconcile(siteKey, buffer, MAX_PROFILES);
+        int buffer = ctx.getJobDetail().getJobDataMap().containsKey(KEY_DELTA_BUFFER)
+                ? ctx.getJobDetail().getJobDataMap().getIntValue(KEY_DELTA_BUFFER) : 5;
+        SiteKeyResolver resolver = BundleUtils.getOsgiService(SiteKeyResolver.class, null);
+        svc.runReconcile(resolver != null ? resolver.resolve() : null, buffer, MAX_PROFILES);
     }
 }
