@@ -202,7 +202,7 @@ public class SfdcSyncService {
                 logger.info("[SFDC-Sync] Login sync complete for email={} - jCustomer profile updated", email);
             } else if (found) {
                 logger.info("[SFDC-Sync] Login sync for email={}: Salesforce record found but nothing updated - "
-                        + "no jCustomer profile with this email, or no mapped field has a value", email);
+                        + "no jCustomer profile with this email, no mapped field has a value, or the profile is already up to date", email);
             } else {
                 logger.info("[SFDC-Sync] Login sync for email={}: no Salesforce Contact or Lead with this email", email);
             }
@@ -350,10 +350,7 @@ public class SfdcSyncService {
             return false;
         }
 
-        profileService.updateProfile(profileId, properties, siteKey);
-        logger.debug("[SFDC-Sync] Updated profile {} ({}) — {} properties", profileId, email, properties.size());
-        rec(run, Outcome.UPDATED, email, profileId, "Contact", contactId, properties, null);
-        return true;
+        return apply(profile, properties, siteKey, run, email, "Contact", contactId);
     }
 
     /**
@@ -396,9 +393,26 @@ public class SfdcSyncService {
             return false;
         }
 
-        profileService.updateProfile(profileId, properties, siteKey);
-        logger.debug("[SFDC-Sync] Updated profile {} from lead ({}) — {} properties", profileId, email, properties.size());
-        rec(run, Outcome.UPDATED, email, profileId, "Lead", leadId, properties, null);
+        return apply(profile, properties, siteKey, run, email, "Lead", leadId);
+    }
+
+    /**
+     * Writes the mapped values that differ from the profile and records the outcome: UPDATED with the
+     * changed fields, or SKIPPED when the profile already holds every value (not an error).
+     *
+     * @return {@code true} when the profile was changed
+     */
+    private boolean apply(Map<String, Object> profile, Map<String, Object> properties, String siteKey, Run run,
+                          String email, String sfObject, String sfId) throws Exception {
+        String profileId = (String) profile.get("itemId");
+        Map<String, Object> changed = JCustomerProfileService.changedProperties(profile, properties);
+        if (changed.isEmpty() || !profileService.updateProfile(profileId, changed, siteKey)) {
+            logger.debug("[SFDC-Sync] Profile {} ({}) already up to date with {} {}", profileId, email, sfObject, sfId);
+            rec(run, Outcome.SKIPPED, email, profileId, sfObject, sfId, null, "already up to date");
+            return false;
+        }
+        logger.debug("[SFDC-Sync] Updated profile {} ({}) from {} - {} properties", profileId, email, sfObject, changed.size());
+        rec(run, Outcome.UPDATED, email, profileId, sfObject, sfId, changed, null);
         return true;
     }
 

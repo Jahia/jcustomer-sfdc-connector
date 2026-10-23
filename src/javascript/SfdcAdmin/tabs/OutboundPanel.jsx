@@ -16,7 +16,7 @@ export default function OutboundPanel() {
     const [sub, setSub] = useState('mapping');
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
             <div style={{ padding: '8px 24px 0' }}>
                 <Tab>
                     {SUB.map(k => (
@@ -25,7 +25,7 @@ export default function OutboundPanel() {
                     ))}
                 </Tab>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Loader size="big" /></div>}>
                     {sub === 'mapping'  && <OutboundMappingTab />}
                     {sub === 'triggers' && <OutboundTriggersTab />}
