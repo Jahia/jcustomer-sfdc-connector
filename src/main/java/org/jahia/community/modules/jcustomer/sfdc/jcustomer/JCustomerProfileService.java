@@ -10,9 +10,13 @@ import org.osgi.service.component.annotations.ReferencePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Finds and updates jCustomer (Apache Unomi) profiles.
@@ -88,16 +92,59 @@ public class JCustomerProfileService {
     // ── Profile update ────────────────────────────────────────────────────────
 
     /**
+     * Returns the entries of {@code properties} whose value differs from the one the profile holds, so
+     * only real changes are sent (and reported). Values compare as text, element by element for lists,
+     * because jCustomer may return a number or a single value where Salesforce sent text.
+     *
+     * @param profile    profile map as returned by a jCustomer search (its {@code properties} are read)
+     * @param properties jCustomer property name → value to write
+     * @return a new map holding only the changed entries; empty when the profile is already up to date
+     */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> changedProperties(Map<String, Object> profile, Map<String, Object> properties) {
+        Object current = profile != null ? profile.get("properties") : null;
+        Map<String, Object> stored = current instanceof Map ? (Map<String, Object>) current : Map.of();
+        Map<String, Object> changed = new HashMap<>();
+        properties.forEach((k, v) -> {
+            if (!sameValue(stored.get(k), v)) changed.put(k, v);
+        });
+        return changed;
+    }
+
+    private static boolean sameValue(Object stored, Object value) {
+        return Objects.equals(asText(stored), asText(value));
+    }
+
+    private static Object asText(Object v) {
+        if (v == null) return null;
+        if (v instanceof Collection) {
+            List<String> out = new ArrayList<>();
+            for (Object o : (Collection<?>) v) out.add(String.valueOf(asText(o)));
+            return out.size() == 1 ? out.get(0) : out;
+        }
+        if (v instanceof Number) {
+            try { return new BigDecimal(v.toString()).stripTrailingZeros().toPlainString(); }
+            catch (NumberFormatException e) { return v.toString(); }
+        }
+        return v.toString().trim();
+    }
+
+    /**
      * Updates a jCustomer profile with the provided properties, through Unomi's {@code updateProperties}
      * event signed with the site's jExperience third-party key.
+     *
+     * <p>jCustomer answers {@code updated=0} both when it refuses the event (key, address or allowed
+     * events) and when the profile already holds these values. On {@code 0} the profile is read back:
+     * values already in place mean "no change", anything else is reported as a refusal.
      *
      * @param profileId  jCustomer profile itemId
      * @param properties Map of jCustomer property name → value
      * @param siteKey    site whose jExperience settings select the jCustomer instance
-     * @throws IllegalStateException when jExperience is unavailable, or jCustomer did not update the
-     *                               profile (the message says what to check)
+     * @return {@code true} when jCustomer changed the profile, {@code false} when it already held these values
+     * @throws IllegalStateException when jExperience is unavailable, or jCustomer refused the update
+     *                               (the message says what to check)
      */
-    public void updateProfile(String profileId, Map<String, Object> properties, String siteKey) throws Exception {
+    public boolean updateProfile(String profileId, Map<String, Object> properties, String siteKey) throws Exception {
         if (siteKey == null || siteKey.isBlank()) {
             throw new IllegalStateException("[JC-Profile] No site key resolved - cannot select the jExperience settings");
         }
@@ -141,6 +188,10 @@ public class JCustomerProfileService {
                 ? ((Number) response.get("updated")).intValue() : -1;
         if (updated == -1) {
             logger.warn("[JC-Profile] Unexpected event collector response for profile {}: {}", profileId, response);
+        } else if ((updated & UNOMI_ERROR) == 0 && (updated & UNOMI_PROFILE_UPDATED) == 0
+                && changedProperties(getProfileById(profileId, siteKey), properties).isEmpty()) {
+            logger.debug("[JC-Profile] Profile {} already holds these {} properties - no change", profileId, properties.size());
+            return false;
         } else if ((updated & UNOMI_PROFILE_UPDATED) == 0 || (updated & UNOMI_ERROR) != 0) {
             throw new IllegalStateException("[JC-Profile] jCustomer did not update profile " + profileId
                     + " (event collector returned updated=" + updated + "). updateProperties is a privileged event:"
@@ -149,6 +200,7 @@ public class JCustomerProfileService {
                     + " (UNOMI_THIRDPARTY_PROVIDER1_KEY / _IPADDRESSES / _ALLOWEDEVENTS).");
         }
         logger.debug("[JC-Profile] Updated profile {} - {} properties", profileId, properties.size());
+        return true;
     }
 
     /**

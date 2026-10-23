@@ -15,7 +15,7 @@ export default function SfdcAdmin() {
     const [tab, setTab] = useState('connection');
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', width: '100%', minWidth: 0, contain: 'inline-size' }}>
             <Header
                 title={t(`${NS}:admin.panel.title`)}
                 toolbarLeft={[

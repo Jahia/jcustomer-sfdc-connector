@@ -1,7 +1,7 @@
 .wrapper { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
 .subtitle { color: var(--color-gray-600, #6b7280); }
 .center { display: flex; justify-content: center; padding: 48px; }
-.header { display: flex; align-items: flex-start; justify-content: space-between; }
+.header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; }
 .headerActions { display: flex; gap: 8px; flex-shrink: 0; }
 .table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
 .th { text-align: left; padding: 8px 12px; background: var(--color-gray-100, #f3f4f6); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--color-gray-200, #e5e7eb); }
@@ -31,3 +31,9 @@
     flex-wrap: wrap;
     gap: 4px;
 }
+
+/* History: long statuses and messages wrap (Moonstone table cells are nowrap), and the screen never
+   grows wider than its container, whatever the host layout around it. */
+.fitWidth { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.tableScroll { min-width: 0; max-width: 100%; overflow-x: auto; }
+.wrapText { white-space: normal; overflow-wrap: anywhere; min-width: 12rem; }

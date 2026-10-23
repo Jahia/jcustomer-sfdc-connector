@@ -157,16 +157,16 @@ export default function HistoryTab({ direction }) {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'run') {
                     return (
-                        <div>
-                            <Typography variant="caption">{v.status}</Typography>
-                            {v.truncated && <Typography variant="caption">{t(`${NS}:history.truncated`)}</Typography>}
+                        <div className={classes.wrapText}>
+                            <Typography variant="caption" className={classes.wrapText}>{v.status}</Typography>
+                            {v.truncated && <Typography variant="caption" className={classes.wrapText}>{t(`${NS}:history.truncated`)}</Typography>}
                         </div>
                     );
                 }
                 return (
-                    <div>
-                        {(v.fields || []).map((f, i) => <Typography key={i} variant="caption">{f}</Typography>)}
-                        {v.message && <Typography variant="caption">{v.message}</Typography>}
+                    <div className={classes.wrapText}>
+                        {(v.fields || []).map((f, i) => <Typography key={i} variant="caption" className={classes.wrapText}>{f}</Typography>)}
+                        {v.message && <Typography variant="caption" className={classes.wrapText}>{v.message}</Typography>}
                     </div>
                 );
             })
@@ -176,7 +176,7 @@ export default function HistoryTab({ direction }) {
     if (loading) return <div className={classes.center}><Loader size="big" /></div>;
 
     return (
-        <div className={classes.wrapper}>
+        <div className={`${classes.wrapper} ${classes.fitWidth}`}>
             <div className={classes.header}>
                 <div>
                     <Typography variant="heading" weight="bold">{t(`${NS}:history.title.${direction}`)}</Typography>
@@ -213,17 +213,19 @@ export default function HistoryTab({ direction }) {
             {runs.length === 0
                 ? <Typography variant="body" className={classes.subtitle}>{t(`${NS}:history.empty`)}</Typography>
                 : (
-                    <DataTable
-                        primaryKey="id"
-                        data={data}
-                        columns={columns}
-                        isStructured
-                        defaultExpandedRows={[]}
-                        enablePagination
-                        defaultItemsPerPage={20}
-                        itemsPerPageOptions={[10, 20, 50]}
-                        i18n={{ itemsPerPage: t(`${NS}:history.pagination.perPage`), of: t(`${NS}:history.pagination.of`) }}
-                    />
+                    <div className={classes.tableScroll}>
+                        <DataTable
+                            primaryKey="id"
+                            data={data}
+                            columns={columns}
+                            isStructured
+                            defaultExpandedRows={[]}
+                            enablePagination
+                            defaultItemsPerPage={20}
+                            itemsPerPageOptions={[10, 20, 50]}
+                            i18n={{ itemsPerPage: t(`${NS}:history.pagination.perPage`), of: t(`${NS}:history.pagination.of`) }}
+                        />
+                    </div>
                 )}
         </div>
     );

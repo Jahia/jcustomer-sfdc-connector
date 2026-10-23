@@ -4,6 +4,16 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-10-23
+
+### Fixed
+- **Inbound: a profile already up to date was reported as an error** (`jCustomer did not update profile ... updated=0`, with advice about the jCustomer key). jCustomer answers `updated=0` both when it refuses the event and when the profile already holds the values, so every login or manual sync of an unchanged profile failed. The sync now sends only the mapped values that differ from the profile and records the others as *skipped: already up to date*; when jCustomer still answers `0`, the profile is read back and the error is raised only if the values are not in place.
+
+- **History tab: Refresh, Export and Purge out of sight on jContent 3.8.** A run with a long status (an error message) widened the table, and on jContent 3.8 the connector screen grew with it past the window, so the buttons (and the Status / Details column) were off screen and could not be scrolled to. The screen now keeps the width of its container, long statuses and messages wrap, and a table still too wide scrolls on its own.
+
+### Changed
+- An inbound history record lists only the fields that changed, not every mapped field.
+
 ## [2.4.0] - 2026-10-23
 
 ### Added
