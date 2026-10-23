@@ -123,7 +123,7 @@
         "pollRunning": "Synchronisation...",
         "what": {
           "title": "Éléments à synchroniser",
-          "subtitle": "Choisissez quelles modifications jCustomer sont envoyées vers Salesforce (s'applique aux exécutions planifiées et manuelles)."
+          "subtitle": "Activez les modifications à envoyer automatiquement vers Salesforce. jCustomer est interrogé selon la planification ci-dessous tant qu'au moins une est active ; « Synchroniser maintenant » lance le même envoi immédiatement."
         },
         "target": {
           "label": "Objet Salesforce cible",
@@ -141,11 +141,9 @@
         },
         "schedule": {
           "title": "Planification",
-          "subtitle": "Exécute la synchronisation automatiquement selon un planning cron. Vous pouvez aussi la lancer à la demande avec « Synchroniser maintenant ».",
-          "enabled": {
-            "label": "Activer la synchronisation planifiée",
-            "desc": "Interroge jCustomer périodiquement et envoie les profils modifiés vers Salesforce."
-          },
+          "subtitle": "Fréquence d'interrogation de jCustomer tant qu'un déclencheur ci-dessus est actif.",
+          "active": "Les modifications sont envoyées automatiquement selon cette planification, à partir du moment où un déclencheur a été activé.",
+          "inactive": "Aucun déclencheur actif : rien n'est envoyé automatiquement. Activez Mises à jour de profil ou Soumissions de formulaire ci-dessus.",
           "cron": "Expression cron"
         }
       },

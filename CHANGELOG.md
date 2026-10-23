@@ -4,6 +4,19 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.5] - 2026-10-23
+
+### Fixed
+- **jCustomer to Salesforce: "Profile updates" did not push anything automatically.** The poll that implements the triggers ran only when a separate schedule switch was also on, and nothing said so: a checked trigger with the switch off never fired. The poll now runs exactly while *Profile updates* or *Form submissions* is on.
+- The triggers tab showed *Profile updates* / *Form submissions* checked when nothing was stored (a default injected by the loader). It now shows what is stored; an absent trigger is off.
+- The poll counted a profile it did not send (no mapping, no mapped value, or a record that cannot be created) as "updated". Results are now `created` / `updated` / `skipped` / `errors`, and the manual push reports *skipped* instead of *pushed*.
+
+### Changed
+- Default poll frequency is **every 5 minutes** (`outbound.poll.cron`), defined once in the component configuration so it also reaches existing installs. A schedule chosen in the Triggers tab still wins; a schedule stored while the old switch was off (never in effect) is ignored.
+- Turning a trigger on pushes the changes made **from that moment** (no 24-hour backfill on the first run); turning all triggers off resets it.
+- The poll is skipped while the Salesforce connection is disabled or not configured.
+- The separate "Enable scheduled sync" switch is removed.
+
 ## [2.3.4] - 2026-10-23
 
 ### Fixed
@@ -68,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security hardening: admin actions gated to server/site administrators, same-origin (CSRF) defense, SSRF allow-list on the Salesforce instance URL, SOQL escaping.
 - Salesforce **Lead** object support; README.
 
+[2.3.5]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.5
 [2.3.4]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.4
 [2.3.3]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.3
 [2.3.2]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.2

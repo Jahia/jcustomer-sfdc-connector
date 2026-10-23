@@ -123,7 +123,7 @@
         "pollRunning": "Syncing...",
         "what": {
           "title": "What to sync",
-          "subtitle": "Choose which jCustomer changes are pushed to Salesforce (applies to both scheduled and manual runs)."
+          "subtitle": "Turn on the changes to push to Salesforce automatically. jCustomer is polled on the schedule below while at least one is on; \"Sync now\" runs the same push immediately."
         },
         "target": {
           "label": "Target Salesforce object",
@@ -141,11 +141,9 @@
         },
         "schedule": {
           "title": "Schedule",
-          "subtitle": "Run the sync automatically on a cron schedule. You can also run it on demand with \"Sync now\".",
-          "enabled": {
-            "label": "Enable scheduled sync",
-            "desc": "Poll jCustomer periodically and push changed profiles to Salesforce."
-          },
+          "subtitle": "How often jCustomer is polled for changes while a trigger above is on.",
+          "active": "Changes are pushed automatically on this schedule, starting from the moment a trigger was turned on.",
+          "inactive": "No trigger is on: nothing is pushed automatically. Turn on Profile updates or Form submissions above.",
           "cron": "Cron expression"
         }
       },

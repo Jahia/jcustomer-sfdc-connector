@@ -63,7 +63,7 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 
 | Trigger | Component | When |
 |---|---|---|
-| Scheduled poll | `SfdcOutboundReconcileJob` (Quartz) | cron set via a friendly builder (Every N minutes / hour / day / week / month) |
+| Profile updates / Form submissions | `SfdcOutboundReconcileJob` (Quartz poll) | runs while either trigger is on, every 5 minutes by default (`outbound.poll.cron`) or on the schedule chosen in the Triggers tab; pushes changes made since the trigger was turned on (no backfill) |
 | Manual | `TriggerOutboundReconcileAction` | admin clicks "Sync now" |
 
 ---
@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.3.4.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.3.5.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.3.4.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.3.5.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -107,6 +107,7 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | `sfdc.api.version` | `v66.0` | Salesforce REST API version used when the Connection tab leaves *API version* empty (the Connection value wins when set). Not repeated anywhere in code. |
 | `sfdc.batch.size` | `200` | Max records per SOQL page |
 | `sync.delta.buffer.minutes` | `5` | Clock-skew buffer for delta / poll |
+| `outbound.poll.cron` | `0 0/5 * * * ?` | jCustomer to Salesforce poll schedule while *Profile updates* or *Form submissions* is on, unless one is chosen in the Triggers tab. The default lives in the component configuration, so it also applies to existing installs (whose `.cfg` is never rewritten on upgrade). |
 | `sync.on.login` | `true` | Sync a user immediately on login |
 | `jcustomer.site.key` | *(empty: auto-detect)* | Site the connector works for: its jExperience settings select the jCustomer instance and the key used to update profiles, and its **site administrators may manage this connector**. Empty = the single site with the `jexperience` module installed; set it when several sites have jExperience. A value that is not a site on this server is ignored with a warning. Manual runs from the admin UI use the site the UI is open on. |
 | `jcustomer.url` / `jcustomer.username` / `jcustomer.password` | *(unset)* | jCustomer REST access for the property-listing call — supplied per-environment, never committed |
@@ -125,7 +126,7 @@ The config is stored under **typed** node types (namespace `jcsfdcnt`, defined i
 | `syncState/` | `jcsfdcnt:syncState` | last inbound run |
 | `outbound/` | `jcsfdcnt:outbound` | outbound container |
 | `outbound/mapping/{Lead,Contact}` | `jcsfdcnt:mappingSet` → `jcsfdcnt:objectMapping` | outbound `jcProperty → sfField` entries |
-| `outbound/triggers/` | `jcsfdcnt:outboundTriggers` | `outboundObject` (Lead \| Contact), `onProfileUpdate`, `onFormSubmission`, `reconcileEnabled`, `reconcileCron` |
+| `outbound/triggers/` | `jcsfdcnt:outboundTriggers` | `outboundObject` (Lead \| Contact), `onProfileUpdate`, `onFormSubmission` (the triggers: the poll runs while one is on), `reconcileCron` (empty = `outbound.poll.cron`); `reconcileEnabled` is legacy (up to 2.3.4) and ignored |
 | `outbound/syncState/` | `jcsfdcnt:syncState` | last outbound run + poll watermark |
 
 **Migration from earlier versions:** releases before 2.2.0 stored this config as `nt:unstructured`. The one-time patch `migration/2100-migrate-config-to-typed.groovy` converts an existing `/settings/jcustomer-sfdc-connector` subtree to the typed node types. Deploy the 2.2.0+ jar first (so the CND is registered), then drop the patch into `<jahia>/patches/groovy/`; the Jahia Patcher runs it once and renames it `.installed`. It is idempotent and reads tolerantly of the legacy layout, so re-running or running on an already-typed config is a no-op.
@@ -138,7 +139,7 @@ jContent → **Administration → SF Connector** (route `/sfdc-connector`). Thre
 
 - **Connection** *(shared)*: Salesforce Connected App credentials; the private key is an unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`; convert PKCS#1 with `openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem`); "Test connection". All labels and hints come from the EN/FR locale files.
 - **SFDC → jCustomer** — Field Mapping (Contact/Account/Lead) · Synchronisation (state + "Sync now") · inbound triggers.
-- **jCustomer → SFDC** — Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + what to sync (profile updates / form submissions) + Schedule (friendly cron builder, down to every minute) + "Sync now" · last outbound run.
+- **jCustomer → SFDC**: Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + the triggers (*Profile updates* / *Form submissions*: turning one on starts the automatic push) + Schedule (how often jCustomer is polled, every 5 minutes by default) + "Sync now" · last outbound run.
 
 In the Field Mapping tabs, the jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown lists the object's fields; both are sorted **alphabetically**.
 
@@ -196,7 +197,7 @@ migration/                         # one-time Groovy patches (nt:unstructured ->
 - **Inbound: no profiles updated:** a jCustomer profile must exist for the record's email (matched, not created). The login sync logs which case applies: `jCustomer profile updated`, `Salesforce record found but nothing updated`, or `no Salesforce Contact or Lead with this email`.
 - **Inbound: `jCustomer did not update profile ... (event collector returned updated=0)`:** profile updates use Unomi's privileged `updateProperties` event, signed with the jCustomer key of the site's jExperience settings (`X-Unomi-Peer`). jCustomer must allow that key from the Jahia server's address with `updateProperties` among the allowed events (`UNOMI_THIRDPARTY_PROVIDER1_KEY` / `_IPADDRESSES` / `_ALLOWEDEVENTS`). This is the same setup jExperience needs for its own login events; on Jahia Cloud it is provided.
 - **`[SFDC-Site] ... set jcustomer.site.key`:** no site could be resolved (no site has jExperience, or several do). Set `jcustomer.site.key` to the site the connector serves.
-- **Outbound: a profile edit isn't reaching Salesforce** — the poll runs on its schedule (default 15 min); use "Sync now" for an immediate run. Console/REST profile edits are caught by the profile poll (via `systemProperties.lastUpdated`).
+- **Outbound: a profile edit isn't reaching Salesforce:** check that *Profile updates* is on (it is what starts the automatic push), then wait for the next poll (every 5 minutes by default) or use "Sync now". Only changes made after the trigger was turned on are pushed. Console/REST profile edits are caught too (via `systemProperties.lastUpdated`). The poll log reports `created` / `updated` / `skipped` / `errors`; `skipped` means nothing was sent (no mapping, no mapped value, or a record Salesforce cannot create).
 - **Outbound: "Cannot create Lead/Contact"** — Salesforce requires `LastName` (+ `Company` for Lead) to create; map them, or existing records still update.
 
 ---

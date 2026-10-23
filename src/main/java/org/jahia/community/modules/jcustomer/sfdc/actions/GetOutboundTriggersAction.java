@@ -29,6 +29,8 @@ public class GetOutboundTriggersAction extends AbstractSfdcAdminAction {
                                    URLResolver url) throws Exception {
         JSONObject response = new JSONObject();
         configService.loadOutboundTriggers().forEach(response::put);
+        // Schedule applied when the admin has not chosen one (outbound.poll.cron), shown by the UI.
+        response.put("reconcileCronDefault", configService.getDefaultPollCron());
         GetSfdcFieldsAction.write(ctx.getResponse(), response.toString());
         return ActionResult.OK;
     }

@@ -38,19 +38,35 @@ public class ConnectorConfigService {
 
     private static final Logger logger = LoggerFactory.getLogger(ConnectorConfigService.class);
 
-    /** Values come from the shipped/operator configuration only; no default lives in code. */
+    /**
+     * Connector configuration ({@code org.jahia.community.jcustomer.sfdc}). A product default that must
+     * also reach existing installs lives here, in one place: a shipped {@code .cfg} marked
+     * {@code # default configuration} is never rewritten on upgrade, so a key added to it later
+     * would never arrive. The {@code .cfg} documents these keys; it does not repeat their values.
+     */
     @interface Config {
         String sfdc_api_version() default "";
+        /** How often the outbound poll runs while an outbound trigger is on (Quartz cron). */
+        String outbound_poll_cron() default "0 0/5 * * * ?";
     }
 
     /** Salesforce REST API version used when the Connection does not set one ({@code sfdc.api.version}). */
     private volatile String defaultApiVersion = "";
+    /** Outbound poll schedule used when the admin has not chosen one ({@code outbound.poll.cron}). */
+    private volatile String defaultPollCron = "";
 
     @Activate
     @Modified
     public void activate(Config config) {
         String v = config.sfdc_api_version();
         this.defaultApiVersion = v == null ? "" : v.trim();
+        String c = config.outbound_poll_cron();
+        this.defaultPollCron = c == null ? "" : c.trim();
+    }
+
+    /** Outbound poll schedule applied when the admin has not chosen one; empty when not configured. */
+    public String getDefaultPollCron() {
+        return defaultPollCron;
     }
 
     public static final String CONFIG_ROOT  = "/settings/jcustomer-sfdc-connector";
@@ -189,22 +205,56 @@ public class ConnectorConfigService {
 
     // ── Outbound triggers ─────────────────────────────────────────────────────
 
+    /**
+     * Outbound trigger configuration as stored. An absent trigger is off. {@code reconcileCron} is
+     * present only when the admin chose a schedule (else {@link #getDefaultPollCron()} applies).
+     */
     public Map<String, String> loadOutboundTriggers() {
         Map<String, String> result = new HashMap<>();
-        result.put("onProfileUpdate", "true");
-        result.put("onFormSubmission", "true");
         result.put("outboundObject", "Lead");
-        result.put("reconcileEnabled", "false");
-        result.put("reconcileCron", "0 0 * * * ?");
         readInto(OUTBOUND_TRIGGERS_NODE, result,
                 "onProfileUpdate", "onFormSubmission", "outboundObject", "reconcileEnabled", "reconcileCron");
+        // Up to 2.3.4 a separate switch enabled the poll. A cron stored while that switch was off was
+        // never in effect (the UI saved its own default), so it is not treated as the admin's choice.
+        if ("false".equalsIgnoreCase(result.remove("reconcileEnabled"))) {
+            result.remove("reconcileCron");
+        }
+        String cron = result.get("reconcileCron");
+        if (cron != null && cron.isBlank()) {
+            result.remove("reconcileCron");
+        }
         return result;
     }
 
+    /** Removes the outbound poll watermark, so the next enabling of a trigger starts from that moment. */
+    public void clearOutboundReconcileAt() {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (session.nodeExists(OUTBOUND_STATE_NODE)) {
+                    JCRNodeWrapper state = (JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE);
+                    if (state.hasProperty("lastReconcileAt")) {
+                        state.getProperty("lastReconcileAt").remove();
+                        session.save();
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            logger.warn("[SFDC-Config] Could not clear lastReconcileAt: {}", e.getMessage());
+        }
+    }
+
     public void saveOutboundTriggers(Map<String, String> values) throws Exception {
+        Map<String, String> toWrite = new HashMap<>(values);
+        toWrite.remove("reconcileEnabled");                      // legacy switch, no longer used
+        String cron = toWrite.get("reconcileCron");
+        boolean clearCron = cron != null && cron.isBlank();      // empty = use the default schedule
+        if (clearCron) toWrite.remove("reconcileCron");
         JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
             JCRNodeWrapper triggers = ensureChild(ensureOutbound(session), "triggers", NT_OUTBOUND_TRIG);
-            writeStringOrBoolean(triggers, values, OUTBOUND_BOOLEANS);
+            writeStringOrBoolean(triggers, toWrite, OUTBOUND_BOOLEANS);
+            if (triggers.hasProperty("reconcileEnabled")) triggers.getProperty("reconcileEnabled").remove();
+            if (clearCron && triggers.hasProperty("reconcileCron")) triggers.getProperty("reconcileCron").remove();
             session.save();
             return null;
         });
