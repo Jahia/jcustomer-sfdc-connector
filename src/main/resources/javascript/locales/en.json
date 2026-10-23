@@ -15,7 +15,8 @@
         "sync": "Synchronisation",
         "triggers": "Event Triggers",
         "inbound": "SFDC → jCustomer",
-        "outbound": "jCustomer → SFDC"
+        "outbound": "jCustomer → SFDC",
+        "history": "History"
       }
     },
     "connection": {
@@ -193,6 +194,57 @@
       "reload": "Reload",
       "remove": "Remove row",
       "refresh": "Refresh"
+    },
+    "history": {
+      "title": {
+        "inbound": "Sync history - SFDC to jCustomer",
+        "outbound": "Sync history - jCustomer to SFDC"
+      },
+      "subtitle": "Each run and what it did. Expand a run to see who was synced and what changed. Polls that found no change are not recorded.",
+      "col": {
+        "when": "Run / Who",
+        "what": "Trigger / Outcome",
+        "result": "Result / Salesforce record",
+        "details": "Status / Details"
+      },
+      "trigger": {
+        "scheduled": "Scheduled",
+        "manual": "Sync now",
+        "login": "Login",
+        "push": "Manual push"
+      },
+      "outcome": {
+        "created": "Created",
+        "updated": "Updated",
+        "skipped": "Skipped",
+        "error": "Error"
+      },
+      "count": {
+        "created": "{{count}} created",
+        "updated": "{{count}} updated",
+        "skipped": "{{count}} skipped",
+        "errors": "{{count}} error(s)"
+      },
+      "nothing": "No record touched",
+      "unknownWho": "(no email)",
+      "truncated": "Details truncated: counts are complete, only the first records are kept.",
+      "empty": "No sync recorded yet.",
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON",
+      "exported": "Exported {{count}} run(s) as {{fmt}}",
+      "purge": "Purge history",
+      "purgeConfirm": {
+        "inbound": "Delete the whole SFDC to jCustomer sync history? This cannot be undone.",
+        "outbound": "Delete the whole jCustomer to SFDC sync history? This cannot be undone."
+      },
+      "purgeYes": "Delete history",
+      "purgeNo": "Cancel",
+      "purged": "History purged: {{count}} run(s) deleted",
+      "refresh": "Refresh",
+      "pagination": {
+        "perPage": "Runs per page",
+        "of": "of"
+      }
     }
   }
 }

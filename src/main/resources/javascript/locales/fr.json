@@ -15,7 +15,8 @@
         "sync": "Synchronisation",
         "triggers": "Déclencheurs",
         "inbound": "SFDC → jCustomer",
-        "outbound": "jCustomer → SFDC"
+        "outbound": "jCustomer → SFDC",
+        "history": "Historique"
       }
     },
     "connection": {
@@ -193,6 +194,57 @@
       "reload": "Recharger",
       "remove": "Supprimer",
       "refresh": "Actualiser"
+    },
+    "history": {
+      "title": {
+        "inbound": "Historique de synchronisation - SFDC vers jCustomer",
+        "outbound": "Historique de synchronisation - jCustomer vers SFDC"
+      },
+      "subtitle": "Chaque exécution et ce qu'elle a fait. Dépliez une exécution pour voir qui a été synchronisé et ce qui a changé. Les interrogations sans changement ne sont pas enregistrées.",
+      "col": {
+        "when": "Exécution / Qui",
+        "what": "Déclencheur / Résultat",
+        "result": "Bilan / Enregistrement Salesforce",
+        "details": "Statut / Détails"
+      },
+      "trigger": {
+        "scheduled": "Planifiée",
+        "manual": "Synchroniser maintenant",
+        "login": "Connexion",
+        "push": "Envoi manuel"
+      },
+      "outcome": {
+        "created": "Créé",
+        "updated": "Mis à jour",
+        "skipped": "Ignoré",
+        "error": "Erreur"
+      },
+      "count": {
+        "created": "{{count}} créé(s)",
+        "updated": "{{count}} mis à jour",
+        "skipped": "{{count}} ignoré(s)",
+        "errors": "{{count}} erreur(s)"
+      },
+      "nothing": "Aucun enregistrement traité",
+      "unknownWho": "(pas d'email)",
+      "truncated": "Détails tronqués : les compteurs sont complets, seuls les premiers enregistrements sont conservés.",
+      "empty": "Aucune synchronisation enregistrée pour le moment.",
+      "exportCsv": "Exporter CSV",
+      "exportJson": "Exporter JSON",
+      "exported": "{{count}} exécution(s) exportée(s) au format {{fmt}}",
+      "purge": "Purger l'historique",
+      "purgeConfirm": {
+        "inbound": "Supprimer tout l'historique de synchronisation SFDC vers jCustomer ? Cette action est irréversible.",
+        "outbound": "Supprimer tout l'historique de synchronisation jCustomer vers SFDC ? Cette action est irréversible."
+      },
+      "purgeYes": "Supprimer l'historique",
+      "purgeNo": "Annuler",
+      "purged": "Historique purgé : {{count}} exécution(s) supprimée(s)",
+      "refresh": "Actualiser",
+      "pagination": {
+        "perPage": "Exécutions par page",
+        "of": "sur"
+      }
     }
   }
 }

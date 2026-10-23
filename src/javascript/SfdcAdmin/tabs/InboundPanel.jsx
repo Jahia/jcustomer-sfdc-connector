@@ -4,9 +4,10 @@ import { Loader, Tab, TabItem } from '@jahia/moonstone';
 
 const MappingTab = lazy(() => import('./MappingTab'));
 const SyncTab    = lazy(() => import('./SyncTab'));
+const HistoryTab = lazy(() => import('./HistoryTab'));
 
 const NS = 'jcustomer-sfdc-connector';
-const SUB = ['mapping', 'sync'];
+const SUB = ['mapping', 'sync', 'history'];
 
 /** SFDC → jCustomer (inbound) — groups the existing field mapping + synchronisation tabs. */
 export default function InboundPanel() {
@@ -27,6 +28,7 @@ export default function InboundPanel() {
                 <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Loader size="big" /></div>}>
                     {sub === 'mapping' && <MappingTab />}
                     {sub === 'sync'    && <SyncTab />}
+                    {sub === 'history' && <HistoryTab direction="inbound" />}
                 </Suspense>
             </div>
         </div>

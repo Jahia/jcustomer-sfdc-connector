@@ -2,9 +2,15 @@ package org.jahia.community.modules.jcustomer.sfdc.sync;
 
 import org.jahia.community.modules.jcustomer.sfdc.client.SfdcApiClient;
 import org.jahia.community.modules.jcustomer.sfdc.config.ConnectorConfigService;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService.Outcome;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService.Run;
+import org.jahia.community.modules.jcustomer.sfdc.history.SyncHistoryService.Trigger;
 import org.jahia.community.modules.jcustomer.sfdc.jcustomer.JCustomerProfileService;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +58,26 @@ public class SfdcOutboundSyncService {
     @Reference public void setConfigService(ConnectorConfigService s) { this.configService = s; }
     @Reference public void setProfileService(JCustomerProfileService s) { this.profileService = s; }
 
+    private volatile SyncHistoryService history;
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
+    public void setHistory(SyncHistoryService h) { this.history = h; }
+    public void unsetHistory(SyncHistoryService h) { this.history = null; }
+
+    /** Starts recording an outbound run, or {@code null} when the history service is unavailable. */
+    private Run startRun(Trigger trigger) {
+        SyncHistoryService h = history;
+        return h != null ? h.start(SyncHistoryService.Direction.OUTBOUND, trigger) : null;
+    }
+
+    private static void rec(Run run, Outcome outcome, String who, String profileId, String sfObject,
+                            String sfId, Map<String, ?> fields, String message) {
+        if (run != null) run.record(outcome, who, profileId, sfObject, sfId, fields, message);
+    }
+
+    private static void finish(Run run, String status) {
+        if (run != null) run.finish(status);
+    }
+
     /**
      * Finds the jCustomer profile matching {@code email} and pushes it to Salesforce as a Lead.
      * Returns {@code true} if a Lead was created or updated.
@@ -63,24 +89,31 @@ public class SfdcOutboundSyncService {
             return false;
         }
         logger.info("[SFDC-Outbound] Push triggered for email={}", email);
+        Run run = startRun(Trigger.PUSH);
         try {
             Map<String, Object> profile = profileService.findProfile(null, email, siteKey);
             if (profile == null) {
                 logger.info("[SFDC-Outbound] No jCustomer profile for email={} — nothing to push", email);
                 configService.saveOutboundSyncState("no-profile", 0, 0, 0);
+                rec(run, Outcome.SKIPPED, email, null, null, null, null, "no jCustomer profile with this email");
+                finish(run, "skipped: no jCustomer profile");
                 return false;
             }
-            PushResult result = pushProfile(profile, siteKey);
+            PushResult result = pushProfile(profile, siteKey, run);
             if (result == PushResult.SKIPPED) {
                 configService.saveOutboundSyncState("skipped: nothing sent (no mapping, no mapped value, or cannot create)", 0, 0, 0);
+                finish(run, "skipped");
                 return false;
             }
             boolean created = result == PushResult.CREATED;
             configService.saveOutboundSyncState("success", created ? 0 : 1, created ? 1 : 0, 0);
+            finish(run, "success");
             return true;
         } catch (Exception e) {
             logger.error("[SFDC-Outbound] Push failed for email={}: {}", email, e.getMessage());
             configService.saveOutboundSyncState("error: " + e.getMessage(), 0, 0, 1);
+            rec(run, Outcome.ERROR, email, null, null, null, null, e.getMessage());
+            finish(run, "error: " + e.getMessage());
             return false;
         }
     }
@@ -97,9 +130,11 @@ public class SfdcOutboundSyncService {
     private static final Pattern UUID_RE =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
-    public void runReconcile(String siteKey, int bufferMinutes, int maxProfiles) {
+    public void runReconcile(String siteKey, int bufferMinutes, int maxProfiles, Trigger trigger) {
+        Run run = startRun(trigger);
         if (siteKey == null || siteKey.isBlank()) {
             logger.error("[SFDC-Outbound] Reconcile skipped - no site resolved (see the [SFDC-Site] message)");
+            finish(run, "error: no site resolved - set jcustomer.site.key");
             return;
         }
         long updated = 0, created = 0, skipped = 0, errors = 0;
@@ -111,6 +146,7 @@ public class SfdcOutboundSyncService {
             if (!doProfiles && !doForms) {
                 logger.info("[SFDC-Outbound] Poll skipped - neither Profile updates nor Form submissions is on");
                 configService.saveOutboundSyncState("skipped: no trigger on", 0, 0, 0);
+                finish(run, "skipped: neither Profile updates nor Form submissions is on");
                 return;
             }
 
@@ -119,6 +155,7 @@ public class SfdcOutboundSyncService {
             if (!"true".equalsIgnoreCase(conn.get("enabled")) || instanceUrl == null || instanceUrl.isBlank()) {
                 logger.debug("[SFDC-Outbound] Poll skipped - Salesforce connection not configured or disabled");
                 configService.saveOutboundSyncState("skipped: Salesforce connection not configured or disabled", 0, 0, 0);
+                finish(run, "skipped: Salesforce connection not configured or disabled");
                 return;
             }
 
@@ -128,6 +165,7 @@ public class SfdcOutboundSyncService {
                 configService.setOutboundReconcileAt(runStart.toString());
                 configService.saveOutboundSyncState("started: pushing changes from " + runStart, 0, 0, 0);
                 logger.info("[SFDC-Outbound] First poll - pushing jCustomer changes made from {} on", runStart);
+                finish(run, "started: pushing changes made from " + runStart);
                 return;
             }
             Instant cutoff = Instant.parse(last).minus(bufferMinutes, ChronoUnit.MINUTES);
@@ -142,7 +180,7 @@ public class SfdcOutboundSyncService {
                     String id = asString(profile.get("itemId"));
                     if (id == null || !UUID_RE.matcher(id).matches()) continue; // skip technical / merged profiles
                     try {
-                        switch (pushProfile(profile, siteKey)) {
+                        switch (pushProfile(profile, siteKey, run)) {
                             case CREATED: created++; break;
                             case UPDATED: updated++; break;
                             default:      skipped++; break;
@@ -151,6 +189,7 @@ public class SfdcOutboundSyncService {
                     } catch (Exception e) {
                         errors++;
                         logger.error("[SFDC-Outbound] Poll error for profile {}: {}", id, e.getMessage());
+                        rec(run, Outcome.ERROR, emailOf(profile), id, null, null, null, e.getMessage());
                     }
                 }
             }
@@ -163,7 +202,7 @@ public class SfdcOutboundSyncService {
                     try {
                         Map<String, Object> profile = profileService.getProfileById(pid, siteKey);
                         if (profile == null) continue;
-                        switch (pushProfile(profile, siteKey)) {
+                        switch (pushProfile(profile, siteKey, run)) {
                             case CREATED: created++; break;
                             case UPDATED: updated++; break;
                             default:      skipped++; break;
@@ -172,6 +211,7 @@ public class SfdcOutboundSyncService {
                     } catch (Exception e) {
                         errors++;
                         logger.error("[SFDC-Outbound] Poll error for form-event profile {}: {}", pid, e.getMessage());
+                        rec(run, Outcome.ERROR, null, pid, null, null, null, e.getMessage());
                     }
                 }
             }
@@ -182,9 +222,11 @@ public class SfdcOutboundSyncService {
                     updated, created, errors);
             logger.info("[SFDC-Outbound] Poll complete - profiles={}, created={}, updated={}, skipped={}, errors={}",
                     pushed.size(), created, updated, skipped, errors);
+            finish(run, "success");
         } catch (Exception e) {
             configService.saveOutboundSyncState("poll-error: " + e.getMessage(), updated, created, errors + 1);
             logger.error("[SFDC-Outbound] Poll failed", e);
+            finish(run, "error: " + e.getMessage());
         }
     }
 
@@ -200,6 +242,12 @@ public class SfdcOutboundSyncService {
      */
     @SuppressWarnings("unchecked")
     public PushResult pushProfile(Map<String, Object> profile, String siteKey) throws Exception {
+        return pushProfile(profile, siteKey, null);
+    }
+
+    /** As {@link #pushProfile(Map, String)}, recording the outcome in {@code run} (may be null). */
+    @SuppressWarnings("unchecked")
+    public PushResult pushProfile(Map<String, Object> profile, String siteKey, Run run) throws Exception {
         String profileId = asString(profile.get("itemId"));
         Map<String, Object> props = profile.get("properties") instanceof Map
                 ? (Map<String, Object>) profile.get("properties") : new HashMap<>();
@@ -211,15 +259,16 @@ public class SfdcOutboundSyncService {
         List<Map<String, String>> mapping = configService.loadOutboundMapping(object);
         if (mapping.isEmpty()) {
             logger.warn("[SFDC-Outbound] No outbound mapping configured for target {} - nothing to push", object);
+            rec(run, Outcome.SKIPPED, email, profileId, object, null, null, "no outbound mapping configured for " + object);
             return PushResult.SKIPPED;
         }
-        return pushToObject(object, profile, props, profileId, email, mapping, siteKey);
+        return pushToObject(object, profile, props, profileId, email, mapping, siteKey, run);
     }
 
     /** Pushes the profile to one Salesforce object type. */
     private PushResult pushToObject(String object, Map<String, Object> profile, Map<String, Object> props,
                                  String profileId, String email, List<Map<String, String>> mapping,
-                                 String siteKey) throws Exception {
+                                 String siteKey, Run run) throws Exception {
         // Build the field set from the mapping
         Map<String, Object> fields = new HashMap<>();
         for (Map<String, String> m : mapping) {
@@ -231,6 +280,7 @@ public class SfdcOutboundSyncService {
         }
         if (fields.isEmpty()) {
             logger.debug("[SFDC-Outbound] Profile {} has no mapped {} values", profileId, object);
+            rec(run, Outcome.SKIPPED, email, profileId, object, null, null, "no mapped jCustomer property has a value");
             return PushResult.SKIPPED;
         }
 
@@ -252,6 +302,8 @@ public class SfdcOutboundSyncService {
                 if (isBlank(fields.get(req))) {
                     logger.warn("[SFDC-Outbound] Cannot create {} for email={} — Salesforce requires {}, "
                             + "not mapped/available; skipping (updates would still work).", object, email, req);
+                    rec(run, Outcome.SKIPPED, email, profileId, object, null, fields,
+                            "Salesforce requires " + req + " to create a " + object + " (not mapped or empty)");
                     return PushResult.SKIPPED;
                 }
             }
@@ -264,6 +316,7 @@ public class SfdcOutboundSyncService {
         }
 
         // Persist the record id back onto the profile for future idempotent pushes
+        String note = null;
         if (recordId != null && !recordId.isBlank() && profileId != null
                 && !recordId.equals(asString(props.get(idProp)))) {
             try {
@@ -273,12 +326,20 @@ public class SfdcOutboundSyncService {
                 // works on the next push, so report it without failing this one.
                 logger.warn("[SFDC-Outbound] {} {} saved, but writing {} back to profile {} failed: {}",
                         object, recordId, idProp, profileId, e.getMessage());
+                note = "saved in Salesforce, but writing " + idProp + " back to the profile failed: " + e.getMessage();
             }
         }
+        rec(run, created ? Outcome.CREATED : Outcome.UPDATED, email, profileId, object, recordId, fields, note);
         return created ? PushResult.CREATED : PushResult.UPDATED;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private static String emailOf(Map<String, Object> profile) {
+        Object props = profile.get("properties");
+        return props instanceof Map ? asString(((Map<String, Object>) props).get(PROP_EMAIL)) : null;
+    }
 
     /** Converts a jCustomer value to a Salesforce-ready value (multi-value → ';'-joined picklist). */
     private static Object toSfValue(Object value) {

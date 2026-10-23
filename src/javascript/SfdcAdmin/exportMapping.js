@@ -9,7 +9,7 @@
  */
 
 // RFC 4180: quote a field if it contains a comma, quote, CR or LF; double any embedded quotes.
-const csvCell = v => {
+export const csvCell = v => {
     const s = v == null ? '' : String(v);
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
@@ -37,7 +37,7 @@ export const toJson = (direction, object, rows) => JSON.stringify({
 }, null, 2);
 
 /** Trigger a browser download of `content` under `filename` with the given MIME type. */
-const download = (filename, content, mime) => {
+export const download = (filename, content, mime) => {
     const blob = new Blob([content], { type: `${mime};charset=utf-8` });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
