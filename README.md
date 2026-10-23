@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.3.2.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.3.3.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.3.2.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.3.3.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -108,7 +108,7 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | `sfdc.batch.size` | `200` | Max records per SOQL page |
 | `sync.delta.buffer.minutes` | `5` | Clock-skew buffer for delta / poll |
 | `sync.on.login` | `true` | Sync a user immediately on login |
-| `jcustomer.site.key` | `mysoprahr` | jExperience site key + **the site whose administrators may manage this connector** |
+| `jcustomer.site.key` | *(empty: auto-detect)* | Site the connector works for: its jExperience settings select the jCustomer instance and the key used to update profiles, and its **site administrators may manage this connector**. Empty = the single site with the `jexperience` module installed; set it when several sites have jExperience. A value that is not a site on this server is ignored with a warning. Manual runs from the admin UI use the site the UI is open on. |
 | `jcustomer.url` / `jcustomer.username` / `jcustomer.password` | *(unset)* | jCustomer REST access for the property-listing call — supplied per-environment, never committed |
 
 > **Credentials are not shipped in source.** Set `jcustomer.url` / `jcustomer.username` / `jcustomer.password` so the mapping UI lists the **connected jCustomer's own** profile properties (fetched live from `/cxs/profiles/properties/targets/profiles`). Use the jCustomer container hostname (e.g. `http://jcustomer:8181`), **not** `localhost`. When unset or unreachable, the UI falls back to a small set of **generic** Unomi well-known properties plus the connector's `SFDC_ContactId/AccountId/LeadId` writeback ids (fail-closed), with no customer-specific names. The shipped `.cfg` carries a `# default configuration` marker, so the values you set survive a module redeploy instead of reverting to the defaults.
@@ -193,7 +193,9 @@ migration/                         # one-time Groovy patches (nt:unstructured ->
 - **Admin action returns 404** — caller is not authenticated (guest cannot resolve the host node). Repeatedly authenticating with fresh sessions can exhaust the authenticated-visitor license cap → `guest` fallback; reuse a session.
 - **Mapping UI shows only generic properties (not your jCustomer's own):** `jcustomer.url`/credentials unset or unreachable (log: `Could not load jCustomer properties live` or `live property listing disabled`), so only the generic Unomi fallback + `SFDC_*` ids are listed. Set them to the jCustomer container hostname, not `localhost`.
 - **`saveConnection` rejects the instance URL** — must be `https` and a Salesforce domain.
-- **Inbound: no profiles updated** — a jCustomer profile must exist for the record's email (matched, not created).
+- **Inbound: no profiles updated:** a jCustomer profile must exist for the record's email (matched, not created). The login sync logs which case applies: `jCustomer profile updated`, `Salesforce record found but nothing updated`, or `no Salesforce Contact or Lead with this email`.
+- **Inbound: `jCustomer did not update profile ... (event collector returned updated=0)`:** profile updates use Unomi's privileged `updateProperties` event, signed with the jCustomer key of the site's jExperience settings (`X-Unomi-Peer`). jCustomer must allow that key from the Jahia server's address with `updateProperties` among the allowed events (`UNOMI_THIRDPARTY_PROVIDER1_KEY` / `_IPADDRESSES` / `_ALLOWEDEVENTS`). This is the same setup jExperience needs for its own login events; on Jahia Cloud it is provided.
+- **`[SFDC-Site] ... set jcustomer.site.key`:** no site could be resolved (no site has jExperience, or several do). Set `jcustomer.site.key` to the site the connector serves.
 - **Outbound: a profile edit isn't reaching Salesforce** — the poll runs on its schedule (default 15 min); use "Sync now" for an immediate run. Console/REST profile edits are caught by the profile poll (via `systemProperties.lastUpdated`).
 - **Outbound: "Cannot create Lead/Contact"** — Salesforce requires `LastName` (+ `Company` for Lead) to create; map them, or existing records still update.
 

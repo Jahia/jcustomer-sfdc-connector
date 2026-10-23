@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * Returns jCustomer profile property definitions for the mapping UI.
  *
  * Uses HttpURLConnection (not HttpClient) — Java's newer HttpClient rejects hostnames
- * containing underscores (e.g. jcustomer_3) with "unsupported URI", whereas
+ * containing underscores (e.g. a Docker service such as jcustomer_1) with "unsupported URI", whereas
  * HttpURLConnection handles them correctly.
  *
  * POST *.getJcProperties.do

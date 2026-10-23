@@ -1,6 +1,8 @@
 package org.jahia.community.modules.jcustomer.sfdc.jcustomer;
 
 import org.jahia.modules.jexperience.admin.ContextServerService;
+import org.jahia.modules.jexperience.admin.ContextServerSettings;
+import org.jahia.modules.jexperience.admin.JExperienceConfigFactory;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
@@ -20,7 +22,11 @@ import java.util.Map;
  *   2. Fallback: search by email
  *   3. On first match by email: store ContactId for future runs
  *
- * Updates use the updateUserEfficyPortalData public event (not restricted to thirdparty IPs).
+ * Updates send Unomi's standard {@code updateProperties} event to {@code /cxs/eventcollector}. It is a
+ * privileged event: jCustomer applies it only when the request carries the third-party key
+ * ({@code X-Unomi-Peer}) from an allowed address. The connector reuses the key jExperience is
+ * configured with for the site, so it works wherever jExperience itself can send privileged events
+ * (Jahia Cloud or on-premise), with no custom jCustomer rule.
  */
 @Component(service = JCustomerProfileService.class, immediate = true)
 public class JCustomerProfileService {
@@ -29,13 +35,22 @@ public class JCustomerProfileService {
 
     private static final String PROP_SFDC_CONTACT_ID = "SFDC_ContactId";
     private static final String PROP_EMAIL           = "email";
-    private static final String EVENT_TYPE           = "updateUserEfficyPortalData";
+    private static final String EVENT_TYPE           = "updateProperties";
+    private static final String PEER_HEADER          = "X-Unomi-Peer";
+    /** Bits of the {@code updated} value returned by the event collector (Unomi {@code EventService}). */
+    private static final int    UNOMI_ERROR           = 1;
+    private static final int    UNOMI_PROFILE_UPDATED = 4;
 
-    private volatile ContextServerService contextServerService;
+    private volatile ContextServerService      contextServerService;
+    private volatile JExperienceConfigFactory  jexperienceConfig;
 
     @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
     public void setContextServerService(ContextServerService s) { this.contextServerService = s; }
     public void unsetContextServerService(ContextServerService s) { this.contextServerService = null; }
+
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
+    public void setJexperienceConfig(JExperienceConfigFactory f) { this.jexperienceConfig = f; }
+    public void unsetJexperienceConfig(JExperienceConfigFactory f) { this.jexperienceConfig = null; }
 
     // ── Profile lookup ────────────────────────────────────────────────────────
 
@@ -73,14 +88,19 @@ public class JCustomerProfileService {
     // ── Profile update ────────────────────────────────────────────────────────
 
     /**
-     * Updates a jCustomer profile with the provided properties.
-     * Uses the updateUserEfficyPortalData public event (no thirdparty restriction).
+     * Updates a jCustomer profile with the provided properties, through Unomi's {@code updateProperties}
+     * event signed with the site's jExperience third-party key.
      *
      * @param profileId  jCustomer profile itemId
-     * @param properties Map of jCustomer property name → value (strings)
-     * @param siteKey    jExperience site key
+     * @param properties Map of jCustomer property name → value
+     * @param siteKey    site whose jExperience settings select the jCustomer instance
+     * @throws IllegalStateException when jExperience is unavailable, or jCustomer did not update the
+     *                               profile (the message says what to check)
      */
     public void updateProfile(String profileId, Map<String, Object> properties, String siteKey) throws Exception {
+        if (siteKey == null || siteKey.isBlank()) {
+            throw new IllegalStateException("[JC-Profile] No site key resolved - cannot select the jExperience settings");
+        }
         if (contextServerService == null || !contextServerService.isAvailable(siteKey)) {
             throw new IllegalStateException("[JC-Profile] ContextServerService not available for site " + siteKey);
         }
@@ -90,19 +110,64 @@ public class JCustomerProfileService {
         properties.forEach((k, v) -> update.put("properties." + k, v));
 
         Map<String, Object> eventProps = new HashMap<>();
-        eventProps.put("update", update);
+        eventProps.put("targetId",   profileId);
+        eventProps.put("targetType", "profile");
+        eventProps.put("update",     update);
+
+        Map<String, Object> source = new HashMap<>();
+        source.put("itemType", "site");
+        source.put("scope",    siteKey);
+        source.put("itemId",   siteKey);
+
+        Map<String, Object> target = new HashMap<>();
+        target.put("itemType", "profile");
+        target.put("itemId",   profileId);
 
         Map<String, Object> event = new HashMap<>();
         event.put("eventType",  EVENT_TYPE);
         event.put("scope",      siteKey);
+        event.put("source",     source);
+        event.put("target",     target);
         event.put("properties", eventProps);
 
         Map<String, Object> body = new HashMap<>();
         body.put("profileId", profileId);
         body.put("events",    List.of(event));
 
-        contextServerService.executePostRequest(siteKey, "/cxs/eventcollector", body, null, null, Map.class);
-        logger.debug("[JC-Profile] Updated profile {} — {} properties", profileId, properties.size());
+        Map<?, ?> response = contextServerService.executePostRequest(
+                siteKey, "/cxs/eventcollector", body, null, peerHeaders(siteKey), Map.class);
+
+        int updated = response != null && response.get("updated") instanceof Number
+                ? ((Number) response.get("updated")).intValue() : -1;
+        if (updated == -1) {
+            logger.warn("[JC-Profile] Unexpected event collector response for profile {}: {}", profileId, response);
+        } else if ((updated & UNOMI_PROFILE_UPDATED) == 0 || (updated & UNOMI_ERROR) != 0) {
+            throw new IllegalStateException("[JC-Profile] jCustomer did not update profile " + profileId
+                    + " (event collector returned updated=" + updated + "). updateProperties is a privileged event:"
+                    + " jExperience's jCustomer key must be set for site '" + siteKey + "', and jCustomer must allow"
+                    + " that key from this Jahia server's address with updateProperties among its allowed events"
+                    + " (UNOMI_THIRDPARTY_PROVIDER1_KEY / _IPADDRESSES / _ALLOWEDEVENTS).");
+        }
+        logger.debug("[JC-Profile] Updated profile {} - {} properties", profileId, properties.size());
+    }
+
+    /**
+     * Returns the {@code X-Unomi-Peer} header carrying the jCustomer third-party key jExperience is
+     * configured with for this site, or {@code null} when it cannot be read (the update is then
+     * refused by jCustomer and reported by {@link #updateProfile}).
+     */
+    private Map<String, String> peerHeaders(String siteKey) {
+        JExperienceConfigFactory factory = jexperienceConfig;
+        ContextServerSettings settings = factory != null ? factory.getSettings(siteKey) : null;
+        String key = settings != null ? settings.getUnomiKey() : null;
+        if (key == null || key.isBlank()) {
+            logger.warn("[JC-Profile] No jCustomer key in the jExperience settings of site '{}' - "
+                    + "jCustomer will refuse profile updates", siteKey);
+            return null;
+        }
+        Map<String, String> headers = new HashMap<>();
+        headers.put(PEER_HEADER, key);
+        return headers;
     }
 
     /**

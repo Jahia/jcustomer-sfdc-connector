@@ -4,6 +4,17 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.3] - 2026-10-23
+
+### Fixed
+- **Salesforce to jCustomer updates were silently dropped** on any jCustomer without a project-specific rule: profile updates sent a custom `updateUserEfficyPortalData` event that only one demo jCustomer handled, so jCustomer accepted it (`updated: 0`) and changed nothing while the log said "Login sync complete". Updates now use Unomi's standard **`updateProperties`** event, signed (`X-Unomi-Peer`) with the jCustomer key from the site's jExperience settings, so they work wherever jExperience works, on Jahia Cloud or on-premise. The event collector's result is checked: a dropped update raises an explicit error instead of a success log.
+- Login sync logging tells apart "profile updated", "Salesforce record found but nothing updated" and "no Salesforce record".
+- "Sync now" (inbound) always ran against a hardcoded site, and the outbound reconcile job ran with the class defaults instead of the configured site and buffer (Quartz instantiates the job per run).
+- A failed Salesforce-id writeback no longer fails an outbound push that Salesforce already accepted.
+
+### Changed
+- **No project-specific site default.** The site is resolved in one place: the site the admin UI is open on (manual runs), else `jcustomer.site.key` when it names an existing site, else the single site with jExperience installed. `jcustomer.site.key` now ships empty; a stale value that is not a site on the server is ignored with a warning. Site administrators of the resolved site may manage the connector.
+
 ## [2.3.2] - 2026-10-23
 
 ### Changed
@@ -47,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security hardening: admin actions gated to server/site administrators, same-origin (CSRF) defense, SSRF allow-list on the Salesforce instance URL, SOQL escaping.
 - Salesforce **Lead** object support; README.
 
+[2.3.3]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.3
 [2.3.2]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.2
 [2.3.1]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.1
 [2.3.0]: https://github.com/Jahia/jcustomer-sfdc-connector/releases/tag/v2.3.0

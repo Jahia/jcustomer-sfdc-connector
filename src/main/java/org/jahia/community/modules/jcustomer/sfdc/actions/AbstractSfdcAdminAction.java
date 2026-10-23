@@ -11,8 +11,7 @@ import org.jahia.services.render.URLResolver;
 import org.jahia.services.usermanager.JahiaGroupManagerService;
 import org.jahia.services.usermanager.JahiaUser;
 import org.jahia.services.usermanager.JahiaUserManagerService;
-import org.osgi.service.cm.Configuration;
-import org.osgi.service.cm.ConfigurationAdmin;
+import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +31,7 @@ import java.util.Map;
  * <ol>
  *   <li><b>Authorization</b> — the caller must be an administrator: either a <em>server
  *       administrator</em> ({@code root} / the global {@code /groups/administrators} group) or a
- *       <em>site administrator</em> of the connector's configured site ({@code jcustomer.site.key}).
+ *       <em>site administrator</em> of the connector's site ({@code jcustomer.site.key}, or the auto-detected jExperience site).
  *       The stock {@link Action} contract only guarantees an <em>authenticated</em> user
  *       ({@link #isRequireAuthenticatedUser()} defaults to {@code true}); without this gate any
  *       logged-in low-privilege user (e.g. a site contributor) could read and overwrite the
@@ -76,24 +75,20 @@ public abstract class AbstractSfdcAdminAction extends Action {
 
     // ── Security controls ───────────────────────────────────────────────────────
 
-    /** OSGi configuration PID carrying {@code jcustomer.site.key}. */
-    private static final String CONFIG_PID = "org.jahia.community.jcustomer.sfdc";
-    /** Fallback site key when the configuration is absent (matches the shipped module default). */
-    private static final String DEFAULT_SITE_KEY = "mysoprahr";
-
     /**
      * Rejects any caller that is not an administrator. Allowed principals: the {@code root} user, a
      * member of the global {@code /groups/administrators} group (server administrator), or a member
      * of the connector site's {@code site-administrators} group (site administrator of the site the
-     * connector serves — {@code jcustomer.site.key}).
+     * connector serves, see {@link SiteKeyResolver}).
      */
     private void requireAdmin() throws JahiaForbiddenAccessException {
         JahiaUser user = getCurrentUser();
         boolean allowed = false;
         if (user != null && !JahiaUserManagerService.isGuest(user)) {
             JahiaGroupManagerService groups = JahiaGroupManagerService.getInstance();
-            allowed = groups.isAdminMember(user.getUsername(), null)                 // server administrator
-                    || groups.isAdminMember(user.getUsername(), connectorSiteKey()); // site administrator of the connector site
+            String site = connectorSiteKey();
+            allowed = groups.isAdminMember(user.getUsername(), null)                         // server administrator
+                    || (site != null && groups.isAdminMember(user.getUsername(), site));    // site administrator of the connector site
         }
         if (!allowed) {
             logger.warn("[SFDC-Auth] Forbidden '{}' attempt by non-admin user '{}'",
@@ -103,26 +98,14 @@ public abstract class AbstractSfdcAdminAction extends Action {
     }
 
     /**
-     * Resolves the connector's site key from the {@code org.jahia.community.jcustomer.sfdc} OSGi
-     * configuration, falling back to {@link #DEFAULT_SITE_KEY}. Read-only; never creates a config.
+     * Returns the connector's site ({@link SiteKeyResolver}: configured {@code jcustomer.site.key}, else
+     * the single jExperience site), or {@code null} when none resolves; then only server
+     * administrators are allowed. The request's own site key is deliberately not used: the connector
+     * configuration is global, so a caller-supplied site must not widen who may change it.
      */
     private String connectorSiteKey() {
-        try {
-            ConfigurationAdmin ca = BundleUtils.getOsgiService(ConfigurationAdmin.class, null);
-            if (ca != null) {
-                Configuration[] cfgs = ca.listConfigurations("(service.pid=" + CONFIG_PID + ")");
-                if (cfgs != null && cfgs.length > 0 && cfgs[0].getProperties() != null) {
-                    Object v = cfgs[0].getProperties().get("jcustomer.site.key");
-                    if (v != null && !v.toString().isBlank()) {
-                        return v.toString();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("[SFDC-Auth] Could not read site key from config, using default '{}': {}",
-                    DEFAULT_SITE_KEY, e.getMessage());
-        }
-        return DEFAULT_SITE_KEY;
+        SiteKeyResolver resolver = BundleUtils.getOsgiService(SiteKeyResolver.class, null);
+        return resolver != null ? resolver.resolve() : null;
     }
 
     /**
