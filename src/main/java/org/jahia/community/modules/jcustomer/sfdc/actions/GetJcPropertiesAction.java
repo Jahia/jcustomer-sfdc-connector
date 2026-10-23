@@ -147,6 +147,11 @@ public class GetJcPropertiesAction extends AbstractSfdcAdminAction {
         }
     }
 
+    // Generic, instance-independent fallback: Unomi well-known profile properties plus the
+    // connector's own Salesforce writeback ids. Returned only when the live jCustomer lookup is
+    // unavailable, and merged (deduplicated by id) under the live list when it succeeds, so a real
+    // Unomi's own properties always drive the mapping UI. Never put a specific customer's property
+    // names here — they would surface on every other instance.
     private static final String[][] FALLBACK_PROPERTIES = {
         {"email",          "email",   "false"},
         {"firstName",      "string",  "false"},
@@ -165,20 +170,6 @@ public class GetJcPropertiesAction extends AbstractSfdcAdminAction {
         {"lastVisit",      "date",    "false"},
         {"SFDC_ContactId", "string",  "false"},
         {"SFDC_AccountId", "string",  "false"},
-        {"MySopraHR_Solution",               "string",  "false"},
-        {"MySopraHR_Version",                "string",  "false"},
-        {"MySopraHR_Mode_Exploitation",      "string",  "false"},
-        {"MySopraHR_Modele",                 "string",  "false"},
-        {"MySopraHR_Pays",                   "string",  "false"},
-        {"MySopraHR_Conventions_Collectives","string",  "false"},
-        {"MySopraHR_Persona",                "string",  "false"},
-        {"MySopraHR_Role",                   "string",  "false"},
-        {"MySopraHR_Type_Compte",            "string",  "false"},
-        {"MySopraHR_Department",             "string",  "false"},
-        {"MySopraHR_Title",                  "string",  "false"},
-        {"MySopraHR_Produits_Services",      "string",  "false"},
-        {"MySopraHR_NotifEnabled",           "boolean", "false"},
-        {"MySopraHR_NotifFrequency",         "string",  "false"},
-        {"MySopraHR_NotifCategories",        "string",  "true"},
+        {"SFDC_LeadId",    "string",  "false"},
     };
 }
