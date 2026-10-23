@@ -69,7 +69,7 @@ public class SfdcApiClient {
         Map<String, String> cfg = configService.loadConnection();
         String instanceUrl = cfg.get("instanceUrl");
         if (instanceUrl != null) instanceUrl = instanceUrl.replaceAll("/+$", ""); // strip trailing slashes
-        String apiVersion  = cfg.getOrDefault("apiVersion", "v66.0");
+        String apiVersion  = apiVersion(cfg);
         String baseUrl     = instanceUrl + "/services/data/" + apiVersion;
 
         List<Map<String, Object>> allRecords = new ArrayList<>();
@@ -100,7 +100,7 @@ public class SfdcApiClient {
         Map<String, String> cfg = configService.loadConnection();
         String instanceUrl = cfg.get("instanceUrl");
         if (instanceUrl != null) instanceUrl = instanceUrl.replaceAll("/+$", ""); // strip trailing slashes
-        String apiVersion  = cfg.getOrDefault("apiVersion", "v66.0");
+        String apiVersion  = apiVersion(cfg);
 
         String url = instanceUrl + "/services/data/" + apiVersion + "/sobjects/" + sobjectName + "/describe";
         Map<String, Object> response = getJson(url, null);
@@ -133,7 +133,7 @@ public class SfdcApiClient {
         Map<String, String> cfg = configService.loadConnection();
         String instanceUrl = cfg.get("instanceUrl");
         if (instanceUrl != null) instanceUrl = instanceUrl.replaceAll("/+$", ""); // strip trailing slashes
-        String apiVersion  = cfg.getOrDefault("apiVersion", "v66.0");
+        String apiVersion  = apiVersion(cfg);
 
         String url = instanceUrl + "/services/data/" + apiVersion + "/limits";
         Map<String, Object> resp = getJson(url, null);
@@ -252,7 +252,7 @@ public class SfdcApiClient {
         Map<String, String> cfg = configService.loadConnection();
         String instanceUrl = cfg.get("instanceUrl");
         if (instanceUrl != null) instanceUrl = instanceUrl.replaceAll("/+$", "");
-        String apiVersion = cfg.getOrDefault("apiVersion", "v66.0");
+        String apiVersion = apiVersion(cfg);
         return instanceUrl + "/services/data/" + apiVersion;
     }
 
@@ -297,5 +297,22 @@ public class SfdcApiClient {
     private static String str(Map<String, Object> m, String key) {
         Object v = m.get(key);
         return v == null ? "" : v.toString();
+    }
+
+    /**
+     * Salesforce REST API version: the Connection's value, else {@code sfdc.api.version} from the OSGi
+     * configuration ({@link ConnectorConfigService#getDefaultApiVersion()}). No version is invented
+     * in code.
+     */
+    private String apiVersion(Map<String, String> cfg) {
+        String v = cfg.get("apiVersion");
+        if (v == null || v.isBlank()) {
+            v = configService.getDefaultApiVersion();
+        }
+        if (v == null || v.isBlank()) {
+            throw new IllegalStateException("No Salesforce API version: set it on the Connection tab or "
+                    + "sfdc.api.version in org.jahia.community.jcustomer.sfdc");
+        }
+        return v.trim();
     }
 }

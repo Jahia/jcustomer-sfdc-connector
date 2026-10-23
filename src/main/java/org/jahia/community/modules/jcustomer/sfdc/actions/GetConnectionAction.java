@@ -40,6 +40,8 @@ public class GetConnectionAction extends AbstractSfdcAdminAction {
             response.put(key, conn.getOrDefault(key, ""));
         }
         response.put("privateKeyStored", conn.containsKey("privateKey") && !conn.get("privateKey").isBlank());
+        // Version applied when the Connection leaves apiVersion empty (sfdc.api.version), shown as placeholder.
+        response.put("apiVersionDefault", configService.getDefaultApiVersion());
 
         GetSfdcFieldsAction.write(ctx.getResponse(), response.toString());
         return ActionResult.OK;

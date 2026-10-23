@@ -20,13 +20,38 @@
     },
     "connection": {
       "title": "Connexion Salesforce",
-      "subtitle": "Renseignez les credentials de votre Connected App Salesforce. La clé privée doit être au format PEM (PKCS#8 ou PKCS#1). Le certificat public doit être uploadé dans la Connected App.",
+      "subtitle": "Renseignez les identifiants de votre Connected App Salesforce. La clé privée doit être un PEM PKCS#8 non chiffré (-----BEGIN PRIVATE KEY-----) ; convertissez une clé PKCS#1 (-----BEGIN RSA PRIVATE KEY-----) avec : openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem. Téléversez le certificat public correspondant dans la Connected App.",
       "enabled": "Connecteur activé",
       "test": "Tester la connexion",
       "testing": "Test en cours...",
       "testOk": "Connexion réussie",
       "testFail": "Échec de connexion",
-      "saved": "Paramètres de connexion sauvegardés"
+      "saved": "Paramètres de connexion sauvegardés",
+      "field": {
+        "instanceUrl": {
+          "label": "URL de l'instance",
+          "placeholder": "https://votreorg.my.salesforce.com"
+        },
+        "clientId": {
+          "label": "Client ID (Consumer Key)",
+          "placeholder": "Consumer key de la Connected App"
+        },
+        "sfUsername": {
+          "label": "Utilisateur API Salesforce",
+          "placeholder": "utilisateur.integration@votreorg.com"
+        },
+        "apiVersion": {
+          "label": "Version d'API",
+          "placeholder": "ex. v66.0",
+          "hint": "Laissez vide pour utiliser {{version}} (sfdc.api.version dans la configuration OSGi)."
+        },
+        "privateKey": {
+          "label": "Clé privée (PEM, PKCS#8)",
+          "placeholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+          "placeholderStored": "Une clé est déjà stockée - collez un nouveau PEM pour la remplacer",
+          "stored": "Clé privée stockée - laissez vide pour la conserver"
+        }
+      }
     },
     "mapping": {
       "title": "Mapping des champs",
@@ -137,7 +162,8 @@
         "status": "Statut",
         "created": "Leads créés",
         "updated": "Leads mis à jour",
-        "errors": "Erreurs"
+        "errors": "Erreurs",
+        "emailPlaceholder": "Adresse email du profil"
       }
     },
     "cron": {

@@ -3,7 +3,9 @@ package org.jahia.community.modules.jcustomer.sfdc.config;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.content.JCRTemplate;
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Modified;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,10 +32,26 @@ import java.util.Set;
  * <p>Reads are tolerant of the legacy {@code nt:unstructured} + all-String layout (JCR converts on
  * read), so it works both before and after the one-time migration.
  */
-@Component(service = ConnectorConfigService.class, immediate = true)
+@Component(service = ConnectorConfigService.class, immediate = true,
+        configurationPid = "org.jahia.community.jcustomer.sfdc")
 public class ConnectorConfigService {
 
     private static final Logger logger = LoggerFactory.getLogger(ConnectorConfigService.class);
+
+    /** Values come from the shipped/operator configuration only; no default lives in code. */
+    @interface Config {
+        String sfdc_api_version() default "";
+    }
+
+    /** Salesforce REST API version used when the Connection does not set one ({@code sfdc.api.version}). */
+    private volatile String defaultApiVersion = "";
+
+    @Activate
+    @Modified
+    public void activate(Config config) {
+        String v = config.sfdc_api_version();
+        this.defaultApiVersion = v == null ? "" : v.trim();
+    }
 
     public static final String CONFIG_ROOT  = "/settings/jcustomer-sfdc-connector";
     public static final String CONN_NODE    = CONFIG_ROOT + "/connection";
@@ -72,13 +90,20 @@ public class ConnectorConfigService {
                 for (String prop : new String[]{"instanceUrl","clientId","sfUsername","privateKey","apiVersion","enabled"}) {
                     if (node.hasProperty(prop)) result.put(prop, node.getProperty(prop).getString());
                 }
-                result.putIfAbsent("apiVersion", "v66.0");
                 return null;
             });
         } catch (Exception e) {
             logger.error("[SFDC-Config] Failed to load connection config", e);
         }
         return result;
+    }
+
+    /**
+     * Salesforce REST API version from the OSGi configuration ({@code sfdc.api.version}), used when the
+     * Connection leaves it empty. Empty when not configured.
+     */
+    public String getDefaultApiVersion() {
+        return defaultApiVersion;
     }
 
     public void saveConnection(Map<String, String> values) throws Exception {

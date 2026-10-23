@@ -20,13 +20,38 @@
     },
     "connection": {
       "title": "Salesforce Connection",
-      "subtitle": "Enter your Salesforce Connected App credentials. The private key must be in PEM format (PKCS#8 or PKCS#1). The public certificate must be uploaded to the Connected App.",
+      "subtitle": "Enter your Salesforce Connected App credentials. The private key must be an unencrypted PKCS#8 PEM (-----BEGIN PRIVATE KEY-----); convert a PKCS#1 key (-----BEGIN RSA PRIVATE KEY-----) with: openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem. Upload the matching public certificate to the Connected App.",
       "enabled": "Connector enabled",
       "test": "Test connection",
       "testing": "Testing...",
       "testOk": "Connection successful",
       "testFail": "Connection failed",
-      "saved": "Connection settings saved"
+      "saved": "Connection settings saved",
+      "field": {
+        "instanceUrl": {
+          "label": "Instance URL",
+          "placeholder": "https://yourorg.my.salesforce.com"
+        },
+        "clientId": {
+          "label": "Client ID (Consumer Key)",
+          "placeholder": "Consumer key of the Connected App"
+        },
+        "sfUsername": {
+          "label": "Salesforce API username",
+          "placeholder": "integration.user@yourorg.com"
+        },
+        "apiVersion": {
+          "label": "API version",
+          "placeholder": "e.g. v66.0",
+          "hint": "Leave empty to use {{version}} (sfdc.api.version in the OSGi configuration)."
+        },
+        "privateKey": {
+          "label": "Private key (PEM, PKCS#8)",
+          "placeholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+          "placeholderStored": "A key is already stored - paste a new PEM to replace it",
+          "stored": "Private key stored - leave empty to keep it"
+        }
+      }
     },
     "mapping": {
       "title": "Field Mapping",
@@ -137,7 +162,8 @@
         "status": "Status",
         "created": "Leads created",
         "updated": "Leads updated",
-        "errors": "Errors"
+        "errors": "Errors",
+        "emailPlaceholder": "Profile email address"
       }
     },
     "cron": {

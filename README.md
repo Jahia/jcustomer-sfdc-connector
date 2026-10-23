@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.3.3.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.3.4.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.3.3.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.3.4.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -104,7 +104,7 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | Key | Default | Purpose |
 |---|---|---|
 | `scheduler.cron` | `0 0 5 * * ?` | Quartz cron for the inbound batch sync |
-| `sfdc.api.version` | `v66.0` | Salesforce REST API version |
+| `sfdc.api.version` | `v66.0` | Salesforce REST API version used when the Connection tab leaves *API version* empty (the Connection value wins when set). Not repeated anywhere in code. |
 | `sfdc.batch.size` | `200` | Max records per SOQL page |
 | `sync.delta.buffer.minutes` | `5` | Clock-skew buffer for delta / poll |
 | `sync.on.login` | `true` | Sync a user immediately on login |
@@ -119,7 +119,7 @@ The config is stored under **typed** node types (namespace `jcsfdcnt`, defined i
 
 | Node | Type | Holds |
 |---|---|---|
-| `connection/` | `jcsfdcnt:connection` | `instanceUrl`, `clientId`, `sfUsername`, `privateKey` (PEM), `apiVersion`, `enabled` (shared by both directions) |
+| `connection/` | `jcsfdcnt:connection` | `instanceUrl`, `clientId`, `sfUsername`, `privateKey` (unencrypted PKCS#8 PEM), `apiVersion` (empty = `sfdc.api.version`), `enabled` (shared by both directions) |
 | `mapping/{Contact,Account,Lead}` | `jcsfdcnt:objectMapping` → `jcsfdcnt:fieldMapping` | inbound `sfField → jcProperty` entries |
 | `triggers/` | `jcsfdcnt:triggers` | inbound `loginEnabled`, `schedulerEnabled`, `schedulerCron` |
 | `syncState/` | `jcsfdcnt:syncState` | last inbound run |
@@ -136,7 +136,7 @@ The config is stored under **typed** node types (namespace `jcsfdcnt`, defined i
 
 jContent → **Administration → SF Connector** (route `/sfdc-connector`). Three top-level tabs:
 
-- **Connection** *(shared)* — Salesforce Connected App credentials (PEM private key); "Test connection".
+- **Connection** *(shared)*: Salesforce Connected App credentials; the private key is an unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`; convert PKCS#1 with `openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem`); "Test connection". All labels and hints come from the EN/FR locale files.
 - **SFDC → jCustomer** — Field Mapping (Contact/Account/Lead) · Synchronisation (state + "Sync now") · inbound triggers.
 - **jCustomer → SFDC** — Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + what to sync (profile updates / form submissions) + Schedule (friendly cron builder, down to every minute) + "Sync now" · last outbound run.
 
