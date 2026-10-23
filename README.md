@@ -14,6 +14,7 @@ connection, map fields, and drive the sync in both directions.
 
 - **Module:** `org.jahia.community.modules:jcustomer-sfdc-connector`
 - **Repository:** https://github.com/Jahia/jcustomer-sfdc-connector
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 - **Platform:** Jahia 8.2 (parent POM `org.jahia.modules:jahia-modules:8.2.0.0`), Java 17
 - **Front-end:** React 18 UI extension (Webpack / Module Federation, `@jahia/ui-extender`, `@jahia/moonstone`)
 
@@ -110,7 +111,7 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | `jcustomer.site.key` | `mysoprahr` | jExperience site key + **the site whose administrators may manage this connector** |
 | `jcustomer.url` / `jcustomer.username` / `jcustomer.password` | *(unset)* | jCustomer REST access for the property-listing call — supplied per-environment, never committed |
 
-> **Credentials are not shipped in source.** When jCustomer URL/credentials are unset, the mapping UI falls back to a built-in property list (fail-closed). Use the jCustomer container hostname (e.g. `http://jcustomer_3:8181`), **not** `localhost`.
+> **Credentials are not shipped in source.** Set `jcustomer.url` / `jcustomer.username` / `jcustomer.password` so the mapping UI lists the **connected jCustomer's own** profile properties (fetched live from `/cxs/profiles/properties/targets/profiles`). Use the jCustomer container hostname (e.g. `http://jcustomer:8181`), **not** `localhost`. When unset or unreachable, the UI falls back to a small set of **generic** Unomi well-known properties plus the connector's `SFDC_ContactId/AccountId/LeadId` writeback ids (fail-closed), with no customer-specific names. The shipped `.cfg` carries a `# default configuration` marker, so the values you set survive a module redeploy instead of reverting to the defaults.
 
 ### Connection & mapping — stored in JCR (`/settings/jcustomer-sfdc-connector`)
 
@@ -138,6 +139,8 @@ jContent → **Administration → SF Connector** (route `/sfdc-connector`). Thre
 - **Connection** *(shared)* — Salesforce Connected App credentials (PEM private key); "Test connection".
 - **SFDC → jCustomer** — Field Mapping (Contact/Account/Lead) · Synchronisation (state + "Sync now") · inbound triggers.
 - **jCustomer → SFDC** — Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + what to sync (profile updates / form submissions) + Schedule (friendly cron builder, down to every minute) + "Sync now" · last outbound run.
+
+In the Field Mapping tabs, the jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown lists the object's fields; both are sorted **alphabetically**.
 
 ### Exporting a mapping
 
@@ -188,7 +191,7 @@ migration/                         # one-time Groovy patches (nt:unstructured ->
 
 - **Admin action returns 403** — caller is not a server/site admin, or the request is cross-origin.
 - **Admin action returns 404** — caller is not authenticated (guest cannot resolve the host node). Repeatedly authenticating with fresh sessions can exhaust the authenticated-visitor license cap → `guest` fallback; reuse a session.
-- **Mapping UI shows only the built-in property list** — jCustomer URL/credentials unset or unreachable (log: `Could not load jCustomer properties live`). Use the container hostname, not `localhost`.
+- **Mapping UI shows only generic properties (not your jCustomer's own):** `jcustomer.url`/credentials unset or unreachable (log: `Could not load jCustomer properties live` or `live property listing disabled`), so only the generic Unomi fallback + `SFDC_*` ids are listed. Set them to the jCustomer container hostname, not `localhost`.
 - **`saveConnection` rejects the instance URL** — must be `https` and a Salesforce domain.
 - **Inbound: no profiles updated** — a jCustomer profile must exist for the record's email (matched, not created).
 - **Outbound: a profile edit isn't reaching Salesforce** — the poll runs on its schedule (default 15 min); use "Sync now" for an immediate run. Console/REST profile edits are caught by the profile poll (via `systemProperties.lastUpdated`).
