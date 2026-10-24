@@ -55,6 +55,8 @@ public class SaveOutboundMappingAction extends AbstractSfdcAdminAction {
 
             configService.saveOutboundMapping(sfObject, mappings);
             GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("status", "ok").toString());
+        } catch (IllegalArgumentException e) {
+            GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("error", e.getMessage()).toString(), 400);
         } catch (Exception e) {
             GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("error", e.getMessage()).toString(), 500);
         }
