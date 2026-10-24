@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Banner, Button, Chip, DataTable, Delete, Download, EmptyData, Loader, Reload, Tooltip, Typography
+    Banner, Button, Chip, DataTable, Delete, Download, EmptyData, Loader, Pagination, Reload, Tooltip, Typography
 } from '@jahia/moonstone';
 import { getSyncHistory, getSyncHistoryRun, exportSyncHistory, purgeSyncHistory } from '../api';
 import { exportHistoryCsv, exportHistoryJson } from '../exportHistory';
@@ -16,6 +16,7 @@ const NS = 'jcustomer-sfdc-connector';
 const OUTCOME_COLOR = { created: 'success', updated: 'accent', skipped: 'warning', error: 'danger' };
 // Widths add up to 100%: DataTable rows are wrapping flex rows. Details (the changed fields) get the most room.
 const WIDTHS = { when: '26%', what: '14%', result: '22%', detail: '38%' };
+const PER_PAGE_OPTIONS = [10, 20, 50];
 const COUNTS = [
     ['created', 'success'], ['updated', 'accent'], ['skipped', 'warning'], ['errors', 'danger']
 ];
@@ -60,6 +61,10 @@ export default function HistoryTab({ direction }) {
     const [confirming,  setConfirming]  = useState(false);
     const [msg,         setMsg]         = useState(null);
     const [retention,   setRetention]   = useState(null);
+    // Paged here, not by DataTable: its pagination goes back to page 1 whenever its data changes, and
+    // opening a run changes the data (its records arrive), so a run on page 2 could not be opened.
+    const [page,        setPage]        = useState(1);
+    const [perPage,     setPerPage]     = useState(20);
     const requested = useRef(new Set());
 
     const load = useCallback(async () => {
@@ -76,6 +81,10 @@ export default function HistoryTab({ direction }) {
     }, [direction]);
 
     useEffect(() => { load(); }, [load]);
+
+    // After a refresh or a purge the list can be shorter: stay on the last page that still exists.
+    const lastPage = Math.max(1, Math.ceil(runs.length / perPage));
+    useEffect(() => { if (page > lastPage) setPage(lastPage); }, [page, lastPage]);
 
     const loadRecords = useCallback(async runId => {
         if (!runId || requested.current.has(runId)) return;
@@ -114,7 +123,8 @@ export default function HistoryTab({ direction }) {
     };
 
 
-    const data = runs.map(run => {
+    const pageRuns = runs.slice((page - 1) * perPage, page * perPage);
+    const data = pageRuns.map(run => {
         const loaded = records[run.id];
         let subRows;
         if (run.recordCount > 0) {
@@ -223,19 +233,29 @@ export default function HistoryTab({ direction }) {
             {runs.length === 0
                 ? <EmptyData title={t(`${NS}:history.emptyTitle`)} message={t(`${NS}:history.empty`)} />
                 : (
-                    <div className={classes.tableScroll}>
-                        <DataTable
-                            primaryKey="id"
-                            data={data}
-                            columns={columns}
-                            isStructured
-                            defaultExpandedRows={[]}
-                            enablePagination
-                            defaultItemsPerPage={20}
-                            itemsPerPageOptions={[10, 20, 50]}
-                            i18n={{ itemsPerPage: t(`${NS}:history.pagination.perPage`), of: t(`${NS}:history.pagination.of`) }}
-                        />
-                    </div>
+                    <>
+                        <div className={classes.tableScroll}>
+                            <DataTable
+                                primaryKey="id"
+                                data={data}
+                                columns={columns}
+                                isStructured
+                                defaultExpandedRows={[]}
+                                enablePagination={false}
+                            />
+                        </div>
+                        <div className={classes.paging}>
+                            <Pagination
+                                currentPage={Math.min(page, lastPage)}
+                                itemsPerPage={perPage}
+                                itemsPerPageOptions={PER_PAGE_OPTIONS}
+                                totalOfItems={runs.length}
+                                onPageChange={setPage}
+                                onItemsPerPageChange={n => { setPerPage(n); setPage(1); }}
+                                i18n={{ itemsPerPage: t(`${NS}:history.pagination.perPage`), of: t(`${NS}:history.pagination.of`) }}
+                            />
+                        </div>
+                    </>
                 )}
             </Section>
 

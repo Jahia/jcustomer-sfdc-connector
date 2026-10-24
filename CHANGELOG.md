@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The history is always read and written in the `default` workspace, whatever the workspace of the request that recorded a run.
 - An error answered by an action is shown with its message in the admin screen, not only its HTTP status.
 
+### Fixed
+- **History: opening a run on page 2 or later went back to page 1.** The table's own pagination returned to the first page whenever its data changed, and opening a run changes it (its records arrive). The runs are now paged by the screen itself, under the table; the pagination also stays inside its card in a narrow pane.
+
 ### Removed
 - `history.max.runs`: the history is bounded by the retention in days instead.
 
