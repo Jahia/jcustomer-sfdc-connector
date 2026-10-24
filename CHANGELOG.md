@@ -4,6 +4,27 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-10-24
+
+### Added
+- **Overview tab**, opened first: the connection (tested on open) and one card per direction with its status, triggers in plain words, mapping coverage per object and last run, with *Sync now*, *Triggers* and *History* shortcuts. Problems (connection not configured, disabled or failing, a direction without mapping, errors in the last run) are listed on top, each with a button that opens the screen that fixes it.
+- Schedules are described in words next to the cron builder (*Every day at 05:00*, *Every 5 min*).
+- Mapping warns about a target mapped twice; *Unsaved changes* chips on every screen, and *Save* is enabled only when something changed.
+- Push one profile: Enter in the email field pushes.
+
+### Changed
+- **Admin screen redesigned on Moonstone**, following Jahia's administration layout: cards with a title and description, setting rows (label and help on the left, switch or control on the right), chips for states, banners for results and problems, empty states. Each direction has three sub-tabs: **Mapping**, **Triggers**, **History**. The two mapping screens are one component, the object picker shows how many fields each object maps and which have unsaved changes.
+- Connection grouped into org, Connected App and private key, with a how-to for the key; the result of *Test connection* is shown in place.
+- Run-now results are shown next to the button that produced them, not at the top of the page.
+- History dates are relative (*5 hours ago*), the exact date in a tooltip.
+- Spacing uses Moonstone's tokens.
+
+### Fixed
+- The admin screen overflowed narrow panes: Moonstone's content wrapper sized itself on the widest content, so cards were cut on the right, a header tab wrapped under the content could not be clicked, and table cells overlapped. Cards now stack, controls drop under their text, header tabs scroll sideways and wide tables scroll inside their card.
+- Column renderers work with the `DataTable` of Moonstone 2.20+ (jContent 3.7.1 and later), which passes one object instead of `(value, row)`; tables no longer paginate by 5 rows.
+- Labels with a count no longer show as raw keys (the host's i18next does not resolve plural keys).
+- Texts referred to the old *Field Mapping* tab; em dashes replaced in labels.
+
 ## [2.4.1] - 2026-10-23
 
 ### Fixed

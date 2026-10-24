@@ -16,12 +16,18 @@
         "triggers": "Event Triggers",
         "inbound": "SFDC → jCustomer",
         "outbound": "jCustomer → SFDC",
+        "history": "History",
+        "overview": "Overview"
+      },
+      "sub": {
+        "mapping": "Mapping",
+        "triggers": "Triggers",
         "history": "History"
       }
     },
     "connection": {
       "title": "Salesforce Connection",
-      "subtitle": "Enter your Salesforce Connected App credentials. The private key must be an unencrypted PKCS#8 PEM (-----BEGIN PRIVATE KEY-----); convert a PKCS#1 key (-----BEGIN RSA PRIVATE KEY-----) with: openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem. Upload the matching public certificate to the Connected App.",
+      "subtitle": "Shared by both sync directions. The connector signs in to Salesforce with the JWT Bearer flow of a Connected App.",
       "enabled": "Connector enabled",
       "test": "Test connection",
       "testing": "Testing...",
@@ -31,38 +37,63 @@
       "field": {
         "instanceUrl": {
           "label": "Instance URL",
-          "placeholder": "https://yourorg.my.salesforce.com"
+          "placeholder": "https://yourorg.my.salesforce.com",
+          "helper": "Your My Domain URL, https only."
         },
         "clientId": {
           "label": "Client ID (Consumer Key)",
-          "placeholder": "Consumer key of the Connected App"
+          "placeholder": "Consumer key of the Connected App",
+          "helper": "Consumer key of the Connected App."
         },
         "sfUsername": {
           "label": "Salesforce API username",
-          "placeholder": "integration.user@yourorg.com"
+          "placeholder": "integration.user@yourorg.com",
+          "helper": "Integration user, pre-authorized on the Connected App."
         },
         "apiVersion": {
           "label": "API version",
           "placeholder": "e.g. v66.0",
-          "hint": "Leave empty to use {{version}} (sfdc.api.version in the OSGi configuration)."
+          "hint": "Leave empty to use {{version}} (sfdc.api.version in the OSGi configuration).",
+          "helper": "Salesforce REST API version."
         },
         "privateKey": {
           "label": "Private key (PEM, PKCS#8)",
           "placeholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
           "placeholderStored": "A key is already stored - paste a new PEM to replace it",
-          "stored": "Private key stored - leave empty to keep it"
+          "stored": "Private key stored - leave empty to keep it",
+          "helper": "Unencrypted PKCS#8 PEM (BEGIN PRIVATE KEY)."
+        }
+      },
+      "enabledHelp": "When off, nothing is synced in either direction; settings are kept.",
+      "org": {
+        "title": "Salesforce org",
+        "description": "Where the data lives."
+      },
+      "app": {
+        "title": "Connected App",
+        "description": "The app and the integration user the connector signs in as."
+      },
+      "key": {
+        "title": "Private key",
+        "description": "Signs the sign-in requests. It is stored on the server and never shown again.",
+        "stored": "Key stored",
+        "missing": "No key yet",
+        "howTo": {
+          "title": "How to create the key and certificate",
+          "step1": "1. Generate an unencrypted PKCS#8 key: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out key.pem",
+          "step2": "2. Create its certificate and upload it to the Connected App (Use digital signatures): openssl req -new -x509 -key key.pem -out cert.crt -days 3650",
+          "step3": "3. Paste the content of key.pem here. A PKCS#1 key (BEGIN RSA PRIVATE KEY) must be converted first: openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem"
         }
       }
     },
     "mapping": {
-      "title": "Field Mapping",
-      "subtitle": "Map Salesforce Contact, Account and Lead fields to jCustomer profile properties. Email (→ email) is required for profile matching.",
       "col": {
         "sfField": "Salesforce Field",
-        "jcProperty": "jCustomer Property"
+        "jcProperty": "jCustomer Property",
+        "sfFieldOf": "Salesforce field ({{object}})"
       },
-      "selectField": "— Select SF field —",
-      "selectProperty": "— Select jC property —",
+      "selectField": "Select a Salesforce field",
+      "selectProperty": "Select a jCustomer property",
       "addRow": "Add mapping",
       "empty": "No mappings configured. Click \"Add mapping\" to start.",
       "saved": "Mapping saved for {{obj}}",
@@ -73,6 +104,26 @@
         "jsonTip": "Download the {{obj}} field mapping as a JSON file",
         "done": "Exported {{count}} {{obj}} mapping row(s) as {{fmt}}",
         "empty": "No complete {{obj}} mappings to export"
+      },
+      "title": {
+        "inbound": "What Salesforce writes into jCustomer",
+        "outbound": "What jCustomer writes into Salesforce"
+      },
+      "subtitle": {
+        "inbound": "For each Salesforce object, pick the field and the jCustomer property it fills. Profiles are matched by email.",
+        "outbound": "For each jCustomer property, pick the Salesforce field it fills. Records are matched by stored id, then email."
+      },
+      "loadError": "Some data could not be loaded",
+      "savedFor": "{{object}} mapping saved",
+      "required": {
+        "title": "{{object}} records cannot be created yet"
+      },
+      "duplicates": "Mapped more than once: {{fields}}",
+      "duplicatesHelp": "Each target can receive one value: keep one row per target.",
+      "emptyTitle": "No {{object}} field mapped",
+      "emptyMessage": {
+        "inbound": "Add a row to copy a Salesforce field into a jCustomer property.",
+        "outbound": "Add a row to send a jCustomer property to a Salesforce field."
       }
     },
     "sync": {
@@ -84,13 +135,13 @@
         "save": "Save trigger config",
         "login": {
           "label": "Login trigger",
-          "desc": "Sync this user's SF data immediately on every Jahia login (OIDC, local). Runs asynchronously — login is not delayed."
+          "desc": "Sync this user's SF data immediately on every Jahia login (OIDC, local). Runs asynchronously - login is not delayed."
         },
         "scheduler": {
           "label": "Scheduled batch",
           "desc": "Sync all subscribed users on a cron schedule. Uses delta sync (LastModifiedDate filter).",
           "cron": "Cron expression",
-          "cronHint": "Format: second minute hour day month weekday — e.g. 0 0 5 * * ? = daily at 05:00 UTC"
+          "cronHint": "Format: second minute hour day month weekday - e.g. 0 0 5 * * ? = daily at 05:00 UTC"
         },
         "manual": {
           "label": "Manual sync",
@@ -106,20 +157,23 @@
       "trigger": "Sync now",
       "running": "Running...",
       "started": "Sync started in background. Refresh in a few seconds to see the result.",
-      "info": "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file."
+      "info": "The scheduled batch sync runs daily at 05:00 UTC. A login-triggered sync also fires automatically when a user logs in. Configure the schedule in the OSGi configuration file.",
+      "now": {
+        "title": "Run now"
+      }
     },
     "outbound": {
       "mapping": {
         "title": "Outbound Field Mapping",
         "subtitle": "Map jCustomer profile properties to Salesforce Lead and Contact fields. Matched records are updated; unmatched profiles create a new one.",
         "saved": "Outbound {{obj}} mapping saved",
-        "requiredHint": "Salesforce requires {{fields}} to create a {{obj}} — map them, or only existing {{obj}} records will be updated."
+        "requiredHint": "Salesforce requires {{fields}} to create a {{obj}} - map them, or only existing {{obj}} records will be updated."
       },
       "triggers": {
         "title": "Sync to Salesforce",
         "subtitle": "The connector polls jCustomer for changed profiles and pushes them to Salesforce as Leads.",
         "saved": "Outbound sync configuration saved",
-        "pollStarted": "Sync started in the background — check the last outbound run for results.",
+        "pollStarted": "Sync started in the background - check the last outbound run for results.",
         "pollNow": "Sync now",
         "pollRunning": "Syncing...",
         "what": {
@@ -128,7 +182,7 @@
         },
         "target": {
           "label": "Target Salesforce object",
-          "desc": "Push profiles to this object only. Configure its field mapping in the Field Mapping tab.",
+          "desc": "Push profiles to this object only. Configure its fields in the Mapping tab.",
           "lead": "Lead",
           "contact": "Contact"
         },
@@ -145,7 +199,26 @@
           "subtitle": "How often jCustomer is polled for changes while a trigger above is on.",
           "active": "Changes are pushed automatically on this schedule, starting from the moment a trigger was turned on.",
           "inactive": "No trigger is on: nothing is pushed automatically. Turn on Profile updates or Form submissions above.",
-          "cron": "Cron expression"
+          "activeTitle": "Automatic push is on",
+          "inactiveTitle": "Automatic push is off",
+          "cron": "Cron expression",
+          "usingDefault": "Default schedule (outbound.poll.cron). Change it here to override."
+        },
+        "auto": {
+          "title": "Automatic push",
+          "description": "Turn on a trigger and changed profiles are pushed on the schedule below."
+        },
+        "now": {
+          "title": "Run now",
+          "description": "Push immediately, without changing the configuration.",
+          "poll": {
+            "label": "Push the latest changes",
+            "desc": "Runs the same push as the schedule, right away."
+          },
+          "push": {
+            "label": "Push one profile",
+            "desc": "Sends one jCustomer profile, found by email, to a Salesforce {{object}}."
+          }
         }
       },
       "sync": {
@@ -155,14 +228,17 @@
         "emailRequired": "Enter a profile email to push.",
         "push": "Push now",
         "pushing": "Pushing...",
-        "result": "Push {{status}} for {{email}}",
         "lastRun": "Last outbound run",
         "at": "When",
         "status": "Status",
         "created": "Leads created",
         "updated": "Leads updated",
         "errors": "Errors",
-        "emailPlaceholder": "Profile email address"
+        "emailPlaceholder": "Profile email address",
+        "result": {
+          "pushed": "{{email}} pushed to Salesforce",
+          "skipped": "{{email}} was not pushed: see History for the reason"
+        }
       }
     },
     "cron": {
@@ -186,6 +262,13 @@
         "friday": "Friday",
         "saturday": "Saturday",
         "sunday": "Sunday"
+      },
+      "describe": {
+        "hourly": "Every hour at :{{minute}}",
+        "daily": "Every day at {{time}}",
+        "weekly": "Every {{day}} at {{time}}",
+        "monthly": "On day {{day}} of every month at {{time}}",
+        "minutes": "Every {{count}} min"
       }
     },
     "action": {
@@ -244,7 +327,86 @@
       "pagination": {
         "perPage": "Runs per page",
         "of": "of"
-      }
+      },
+      "emptyTitle": "Nothing recorded yet"
+    },
+    "common": {
+      "unsaved": "Unsaved changes"
+    },
+    "overview": {
+      "lastActivity": "Last activity",
+      "noActivity": "No sync recorded yet",
+      "started": {
+        "inbound": "Salesforce → jCustomer sync started in the background. Results appear in History.",
+        "outbound": "jCustomer → Salesforce push started in the background. Results appear in History."
+      },
+      "trigger": {
+        "login": "On login",
+        "profileUpdate": "Profile updates",
+        "formSubmission": "Form submissions"
+      },
+      "status": {
+        "off": "Off",
+        "paused": "Paused",
+        "active": "Active"
+      },
+      "inbound": {
+        "title": "Salesforce → jCustomer",
+        "description": "Salesforce Contact, Account and Lead data enriches jCustomer profiles."
+      },
+      "outbound": {
+        "title": "jCustomer → Salesforce",
+        "description": "jCustomer profiles create or update a Salesforce record."
+      },
+      "triggers": "Triggers",
+      "noTrigger": "None: nothing runs automatically",
+      "mapping": "Mapping",
+      "target": "Target: {{object}}",
+      "syncNow": "Sync now",
+      "openTriggers": "Triggers",
+      "openHistory": "History",
+      "fix": "Fix it",
+      "connection": {
+        "title": "Salesforce connection",
+        "none": "Not configured yet",
+        "ok": "Connected",
+        "failed": "Connection failed",
+        "disabled": "Connector disabled",
+        "edit": "Edit connection",
+        "keyStored": "Key stored",
+        "keyMissing": "No key"
+      },
+      "attention": {
+        "notConfigured": {
+          "title": "The Salesforce connection is not configured",
+          "text": "Enter the Connected App details and the private key to start syncing."
+        },
+        "disabled": {
+          "title": "The connector is disabled",
+          "text": "Nothing is synced in either direction until it is enabled."
+        },
+        "testFailed": {
+          "title": "Salesforce cannot be reached with these settings",
+          "text": "Check the connection settings."
+        },
+        "inboundNoMapping": {
+          "title": "Salesforce → jCustomer runs but maps no field",
+          "text": "Map Contact or Lead fields, or turn its triggers off."
+        },
+        "outboundNoMapping": {
+          "title": "jCustomer → Salesforce runs but maps no {{object}} field",
+          "text": "Map the {{object}} fields to push, or turn its triggers off."
+        },
+        "inboundErrors": {
+          "title": "The last Salesforce → jCustomer run had {{count}} error(s)",
+          "text": "Open the history to see who failed and why."
+        },
+        "outboundErrors": {
+          "title": "The last jCustomer → Salesforce run had {{count}} error(s)",
+          "text": "Open the history to see who failed and why."
+        }
+      },
+      "fields": "{{object}}: {{count}} field(s)"
     }
   }
 }

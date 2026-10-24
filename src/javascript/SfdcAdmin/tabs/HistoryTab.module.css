@@ -1,0 +1,18 @@
+/* History: layout only; components are Moonstone. */
+.center { display: flex; justify-content: center; padding: 48px; }
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--moon-spacing-nano);
+}
+
+/* The screen never grows wider than its container, whatever the host layout around it. */
+.fitWidth { min-width: 0; max-width: 100%; box-sizing: border-box; }
+
+/* In a narrow pane the table scrolls sideways instead of truncating every column. */
+.tableScroll { min-width: 0; max-width: 100%; overflow-x: auto; }
+.tableScroll > * { min-width: 640px; }
+
+/* Long statuses and messages wrap (Moonstone table cells are nowrap). */
+.wrapText { white-space: normal; overflow-wrap: anywhere; min-width: 12rem; }

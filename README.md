@@ -42,7 +42,7 @@ directions.
 ### Inbound (SFDC → jCustomer)
 
 1. Query Salesforce **Contact** (+ related **Account** fields) and **Lead** via SOQL, with pagination.
-2. Match each record to a jCustomer profile — by a stored SFDC id (`SFDC_ContactId`), else by email.
+2. Match each record to a jCustomer profile - by a stored SFDC id (`SFDC_ContactId`), else by email.
 3. Update the profile's properties via the Unomi event collector, per the field mapping.
 
 | Trigger | Component | When |
@@ -53,10 +53,10 @@ directions.
 
 ### Outbound (jCustomer → SFDC)
 
-Poll-based, following the approach of Jahia's official [Workato Unomi connector](https://github.com/Jahia/workato-unomi-connector) — no custom Unomi plugin, no webhook, nothing deployed into the jCustomer container:
+Poll-based, following the approach of Jahia's official [Workato Unomi connector](https://github.com/Jahia/workato-unomi-connector) - no custom Unomi plugin, no webhook, nothing deployed into the jCustomer container:
 
 1. Poll `/cxs/profiles/search` for profiles changed since the last run (`systemProperties.lastUpdated`), and `/cxs/events/search` for recent **form** events.
-2. For each changed profile (with an email), push to the configured **target object** — **Lead** or **Contact** (chosen in the Triggers tab).
+2. For each changed profile (with an email), push to the configured **target object** - **Lead** or **Contact** (chosen in the Triggers tab).
 3. Resolve the target record by the stored id (`SFDC_LeadId` / `SFDC_ContactId`) then email; **update** if found, **create** if not. The new id is written back to the profile for idempotent future updates.
 
 Create requirements are per object (Salesforce rules): **Lead** needs `LastName` + `Company`, **Contact** needs `LastName`. Missing → skipped with a warning (updates still work). Converted Leads are excluded from matching.
@@ -97,7 +97,7 @@ Alternatively use the Provisioning API or the jContent module manager.
 
 ## Configuration
 
-### Runtime behaviour — OSGi config
+### Runtime behaviour - OSGi config
 
 PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configurations/org.jahia.community.jcustomer.sfdc.cfg`):
 
@@ -113,11 +113,11 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | `history.max.value.length` | `200` | Field values longer than this are cut in the history. |
 | `sync.on.login` | `true` | Sync a user immediately on login |
 | `jcustomer.site.key` | *(empty: auto-detect)* | Site the connector works for: its jExperience settings select the jCustomer instance and the key used to update profiles, and its **site administrators may manage this connector**. Empty = the single site with the `jexperience` module installed; set it when several sites have jExperience. A value that is not a site on this server is ignored with a warning. Manual runs from the admin UI use the site the UI is open on. |
-| `jcustomer.url` / `jcustomer.username` / `jcustomer.password` | *(unset)* | jCustomer REST access for the property-listing call — supplied per-environment, never committed |
+| `jcustomer.url` / `jcustomer.username` / `jcustomer.password` | *(unset)* | jCustomer REST access for the property-listing call - supplied per-environment, never committed |
 
 > **Credentials are not shipped in source.** Set `jcustomer.url` / `jcustomer.username` / `jcustomer.password` so the mapping UI lists the **connected jCustomer's own** profile properties (fetched live from `/cxs/profiles/properties/targets/profiles`). Use the jCustomer container hostname (e.g. `http://jcustomer:8181`), **not** `localhost`. When unset or unreachable, the UI falls back to a small set of **generic** Unomi well-known properties plus the connector's `SFDC_ContactId/AccountId/LeadId` writeback ids (fail-closed), with no customer-specific names. The shipped `.cfg` carries a `# default configuration` marker, so the values you set survive a module redeploy instead of reverting to the defaults.
 
-### Connection & mapping — stored in JCR (`/settings/jcustomer-sfdc-connector`)
+### Connection & mapping - stored in JCR (`/settings/jcustomer-sfdc-connector`)
 
 The config is stored under **typed** node types (namespace `jcsfdcnt`, defined in `META-INF/definitions.cnd`), so it is browsable and self-describing in the JCR / Definitions browser. Property types are real JCR types (`boolean`, `long`, `date`, `string`) rather than untyped strings.
 
@@ -142,13 +142,18 @@ Its own root, typed so it is browsable: `jcsfdcnt:historyRoot` → `inbound` / `
 
 ## Admin UI
 
-jContent → **Administration → SF Connector** (route `/sfdc-connector`). Three top-level tabs:
+Site administration → **Salesforce ⇄ jCustomer Sync** (route `/jahia/administration/<siteKey>/jcustomer-sfdc-connector`). The screen follows Jahia's administration layout and is built only from Moonstone components (cards, setting rows with switches, chips, banners, tables). All labels and hints come from the EN/FR locale files.
 
-- **Connection** *(shared)*: Salesforce Connected App credentials; the private key is an unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`; convert PKCS#1 with `openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem`); "Test connection". All labels and hints come from the EN/FR locale files.
-- **SFDC → jCustomer** — Field Mapping (Contact/Account/Lead) · Synchronisation (state + "Sync now") · inbound triggers.
-- **jCustomer → SFDC**: Field Mapping (Lead/Contact) · Triggers: **target object** (Lead or Contact) + the triggers (*Profile updates* / *Form submissions*: turning one on starts the automatic push) + Schedule (how often jCustomer is polled, every 5 minutes by default) + "Sync now" · last outbound run.
+Four top-level tabs:
 
-In the Field Mapping tabs, the jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown lists the object's fields; both are sorted **alphabetically**.
+- **Overview**: the state of the whole connector at a glance. The connection (tested on open), and one card per direction with its status (*Active* / *Paused* / *Off*), its triggers in plain words (*On login*, *Every day at 05:00*, *Profile updates*, *Every 5 min*), how many fields each object maps, and the last run (relative time, trigger, result counts), with *Sync now*, *Triggers* and *History* shortcuts. Anything that needs attention (connection not configured, disabled or failing, a direction without mapping, errors in the last run) is listed on top with a button that opens the screen that fixes it.
+- **Connection** *(shared by both directions)*: the on/off switch, the Salesforce org (instance URL, API version), the Connected App (client id, integration user) and the private key, an unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`; convert PKCS#1 with `openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem`), with a how-to. *Save* is enabled only when something changed; *Test connection* shows its result in place.
+- **SFDC → jCustomer** and **jCustomer → SFDC**, each with three sub-tabs:
+  - **Mapping**: one table per Salesforce object (Contact / Account / Lead inbound, Lead / Contact outbound), the object buttons showing how many fields each maps and a dot when it has unsaved changes. Rows are edited in place with searchable dropdowns; the screen warns about a target mapped twice and, outbound, about fields Salesforce requires to create a record. The jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown the object's fields, both sorted **alphabetically**.
+  - **Triggers**: inbound, *On login* and the scheduled batch (cron builder with its schedule in plain words) and *Sync now*. Outbound, the **target object** (Lead or Contact), the triggers (*Profile updates* / *Form submissions*: turning one on starts the automatic push), the schedule (how often jCustomer is polled, every 5 minutes by default), then *Run now*: push the latest changes, or push one profile by email (Enter or *Push now*), with the result shown next to the button.
+  - **History**: see below.
+
+The screen fits narrow panes: cards stack, setting controls drop under their text, header tabs scroll sideways and wide tables scroll inside their card.
 
 ### History
 
@@ -159,10 +164,10 @@ Each direction has a **History** tab: one row per run (when, trigger: *Scheduled
 
 ### Exporting a mapping
 
-Each Field Mapping tab (both directions) has **Export CSV** and **Export JSON** buttons that download the currently-selected object's mapping. The export is generated in the browser — no server round-trip. Only complete rows (both the jCustomer property and the Salesforce field set) are written; the download filename encodes direction and object, e.g. `sfdc-inbound-Contact-mapping.csv`, `sfdc-outbound-Lead-mapping.json`.
+Each Mapping tab (both directions) has **Export CSV** and **Export JSON** buttons that download the currently-selected object's mapping. The export is generated in the browser - no server round-trip. Only complete rows (both the jCustomer property and the Salesforce field set) are written; the download filename encodes direction and object, e.g. `sfdc-inbound-Contact-mapping.csv`, `sfdc-outbound-Lead-mapping.json`.
 
-- **CSV** — a `jcProperty,sfField` header plus one line per mapping (RFC-4180 quoting).
-- **JSON** — a self-describing document: `{ "direction", "object", "exportedAt", "mappings": [ { "jcProperty", "sfField" } ] }`.
+- **CSV** - a `jcProperty,sfField` header plus one line per mapping (RFC-4180 quoting).
+- **JSON** - a self-describing document: `{ "direction", "object", "exportedAt", "mappings": [ { "jcProperty", "sfField" } ] }`.
 
 ---
 
@@ -170,12 +175,12 @@ Each Field Mapping tab (both directions) has **Export CSV** and **Export JSON** 
 
 Admin operations are Jahia Actions at `POST /cms/render/default/{lang}/sites/systemsite.{action}.do`. Every action extends `AbstractSfdcAdminAction`, which enforces two controls before any logic (HTTP 403 otherwise):
 
-1. **Authorization** — the caller must be a **server administrator** (`root` / global `administrators`) **or** a **site administrator** of the connector's configured site.
-2. **Same-origin (CSRF) defense** — the request `Origin`/`Referer` host must match the Jahia host.
+1. **Authorization** - the caller must be a **server administrator** (`root` / global `administrators`) **or** a **site administrator** of the connector's configured site.
+2. **Same-origin (CSRF) defense** - the request `Origin`/`Referer` host must match the Jahia host.
 
 Additional hardening:
-- **SSRF allow-list** — the Salesforce `instanceUrl` is validated on save (`https` + `*.salesforce.com` / `*.force.com`) before any outbound call carrying the org's signed JWT.
-- **No secrets in source** — jCustomer credentials supplied per-environment; the private key is stored in JCR and never returned to the browser.
+- **SSRF allow-list** - the Salesforce `instanceUrl` is validated on save (`https` + `*.salesforce.com` / `*.force.com`) before any outbound call carrying the org's signed JWT.
+- **No secrets in source** - jCustomer credentials supplied per-environment; the private key is stored in JCR and never returned to the browser.
 - **SOQL escaping** on user-derived values.
 
 ---
@@ -186,10 +191,10 @@ Additional hardening:
 src/
 ├── main/java/org/jahia/community/modules/jcustomer/sfdc/
 │   ├── actions/     # Jahia Actions (AbstractSfdcAdminAction base + inbound & outbound actions)
-│   ├── auth/        # SfdcAuthService — JWT Bearer OAuth2 (RS256)
-│   ├── client/      # SfdcApiClient — SOQL query, Describe, create/update sObject
-│   ├── config/      # ConnectorConfigService — JCR-backed config (inbound + outbound)
-│   ├── jcustomer/   # JCustomerProfileService — profile find/get/update + change/event polls
+│   ├── auth/        # SfdcAuthService - JWT Bearer OAuth2 (RS256)
+│   ├── client/      # SfdcApiClient - SOQL query, Describe, create/update sObject
+│   ├── config/      # ConnectorConfigService - JCR-backed config (inbound + outbound)
+│   ├── jcustomer/   # JCustomerProfileService - profile find/get/update + change/event polls
 │   ├── sync/        # SfdcSyncService + SfdcSyncJob (inbound); SfdcOutboundSyncService + SfdcOutboundReconcileJob (outbound)
 │   └── events/      # SfdcLoginEventHandler (login-triggered inbound sync)
 ├── main/resources/
@@ -204,18 +209,18 @@ migration/                         # one-time Groovy patches (nt:unstructured ->
 
 ## Troubleshooting
 
-- **Admin action returns 403** — caller is not a server/site admin, or the request is cross-origin.
-- **Admin action returns 404** — caller is not authenticated (guest cannot resolve the host node). Repeatedly authenticating with fresh sessions can exhaust the authenticated-visitor license cap → `guest` fallback; reuse a session.
+- **Admin action returns 403** - caller is not a server/site admin, or the request is cross-origin.
+- **Admin action returns 404** - caller is not authenticated (guest cannot resolve the host node). Repeatedly authenticating with fresh sessions can exhaust the authenticated-visitor license cap → `guest` fallback; reuse a session.
 - **Mapping UI shows only generic properties (not your jCustomer's own):** `jcustomer.url`/credentials unset or unreachable (log: `Could not load jCustomer properties live` or `live property listing disabled`), so only the generic Unomi fallback + `SFDC_*` ids are listed. Set them to the jCustomer container hostname, not `localhost`.
-- **`saveConnection` rejects the instance URL** — must be `https` and a Salesforce domain.
+- **`saveConnection` rejects the instance URL** - must be `https` and a Salesforce domain.
 - **Inbound: no profiles updated:** a jCustomer profile must exist for the record's email (matched, not created). The login sync logs which case applies: `jCustomer profile updated`, `Salesforce record found but nothing updated`, or `no Salesforce Contact or Lead with this email`.
 - **Inbound: `jCustomer did not update profile ... (event collector returned updated=0)`:** profile updates use Unomi's privileged `updateProperties` event, signed with the jCustomer key of the site's jExperience settings (`X-Unomi-Peer`). jCustomer must allow that key from the Jahia server's address with `updateProperties` among the allowed events (`UNOMI_THIRDPARTY_PROVIDER1_KEY` / `_IPADDRESSES` / `_ALLOWEDEVENTS`). This is the same setup jExperience needs for its own login events; on Jahia Cloud it is provided. A profile that already holds the Salesforce values is not an error: it is recorded as *skipped: already up to date* (2.4.1).
 - **`[SFDC-Site] ... set jcustomer.site.key`:** no site could be resolved (no site has jExperience, or several do). Set `jcustomer.site.key` to the site the connector serves.
 - **Outbound: a profile edit isn't reaching Salesforce:** check that *Profile updates* is on (it is what starts the automatic push), then wait for the next poll (every 5 minutes by default) or use "Sync now". Only changes made after the trigger was turned on are pushed. Console/REST profile edits are caught too (via `systemProperties.lastUpdated`). The poll log reports `created` / `updated` / `skipped` / `errors`; `skipped` means nothing was sent (no mapping, no mapped value, or a record Salesforce cannot create).
-- **Outbound: "Cannot create Lead/Contact"** — Salesforce requires `LastName` (+ `Company` for Lead) to create; map them, or existing records still update.
+- **Outbound: "Cannot create Lead/Contact"** - Salesforce requires `LastName` (+ `Company` for Lead) to create; map them, or existing records still update.
 
 ---
 
 ## License
 
-[MIT](LICENSE) — free to use, modify, and distribute. Provided as-is, without warranty.
+[MIT](LICENSE) - free to use, modify, and distribute. Provided as-is, without warranty.

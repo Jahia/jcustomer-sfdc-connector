@@ -1,5 +1,5 @@
 /**
- * API helpers — POST to Jahia Actions hosted on systemsite.
+ * API helpers - POST to Jahia Actions hosted on systemsite.
  * All connector actions use /sites/systemsite as the host JCR node.
  */
 
@@ -27,7 +27,7 @@ const post = async (actionName, body = null, query = '') => {
     const opts = {
         method: 'POST',
         credentials: 'include',
-        cache: 'no-store',   // never serve a cached response — critical for live data reload
+        cache: 'no-store',   // never serve a cached response - critical for live data reload
         headers: {
             'Content-Type': body ? 'application/json' : 'application/x-www-form-urlencoded',
             'Cache-Control': 'no-cache, no-store',
