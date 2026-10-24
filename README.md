@@ -60,7 +60,9 @@ Poll-based, following the approach of Jahia's official [Workato Unomi connector]
 3. Resolve the target record by the stored id (`SFDC_LeadId` / `SFDC_ContactId`) then email; **update** if found, **create** if not. The new id is written back to the profile for idempotent future updates.
 4. A profile whose push fails (Salesforce unreachable, a validation rule, an API limit) is kept in a retry list (`retryProfiles` on `/settings/jcustomer-sfdc-connector/outbound/syncState`) and pushed again by the next polls, **5 attempts** in all; then it is dropped with an error in the History tab. At most 1000 profiles wait for a retry. A poll that fails as a whole (jCustomer unreachable) leaves the watermark where it was, so the next poll reads the same changes again. Only one poll runs at a time: *Sync now* while a poll runs is skipped.
 
-Create requirements are per object (Salesforce rules): **Lead** needs `LastName` + `Company`, **Contact** needs `LastName`. Missing → skipped with a warning (updates still work). Converted Leads are excluded from matching.
+Create requirements are per object (Salesforce rules): **Lead** needs `LastName` + `Company`, **Contact** needs `LastName`. Missing → skipped with a warning (updates still work), unless the mapping gives a **value if empty** (for example `Company` = *Web visitor*). A mapping row can also send a **fixed value** (no jCustomer property, for example `LeadSource` = *Web*). A profile is pushed only when at least one mapped property has a value: default and fixed values alone never push.
+
+**Converted Leads.** When the target is **Lead** and Salesforce has converted the person's Lead to a Contact, the push updates that **Contact** instead: after Salesforce refuses the update of a stored `SFDC_LeadId` because the Lead is converted, and before creating a Lead when the only Lead with this email is converted (so a person already a Contact is never created again as a Lead). The Contact gets the outbound **Contact** mapping when one is configured, otherwise the fields of the Lead mapping that Contact also has (`Company`, for one, is not on Contact). Its id is written back as `SFDC_ContactId`, and the History tab says which Lead was converted.
 
 | Trigger | Component | When |
 |---|---|---|
@@ -85,11 +87,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.6.1.jar`. Deploy into a running instance's hot-deploy
+The build runs the unit tests (`src/test/java`, JUnit 5: mapping with default values, converted Leads, Salesforce id checks). Produces `target/jcustomer-sfdc-connector-2.6.2.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.6.1.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.6.2.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -153,7 +155,7 @@ Four top-level tabs:
 - **Overview**: the state of the whole connector at a glance. The connection (tested on open), and one card per direction with its status (*Active* / *Paused* / *Off*), its triggers in plain words (*On login*, *Every day at 05:00*, *Profile updates*, *Every 5 min*), how many fields each object maps, and the last run (relative time, trigger, result counts), with *Sync now*, *Triggers* and *History* shortcuts. Anything that needs attention (connection not configured, disabled or failing, a direction without mapping, errors in the last run) is listed on top with a button that opens the screen that fixes it.
 - **Connection** *(shared by both directions)*: the on/off switch, the Salesforce org (instance URL, API version), the Connected App (client id, integration user) and the private key, an unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`; convert PKCS#1 with `openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem`), with a how-to. *Save* is enabled only when something changed; *Test connection* shows its result in place.
 - **SFDC → jCustomer** and **jCustomer → SFDC**, each with three sub-tabs:
-  - **Mapping**: one table per Salesforce object (Contact / Account / Lead inbound, Lead / Contact outbound), the object buttons showing how many fields each maps and a dot when it has unsaved changes. Rows are edited in place with searchable dropdowns; the screen warns about a target mapped twice and, outbound, about fields Salesforce requires to create a record. The jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown the object's fields, both sorted **alphabetically**.
+  - **Mapping**: one table per Salesforce object (Contact / Account / Lead inbound, Lead / Contact outbound), the object buttons showing how many fields each maps and a dot when it has unsaved changes. Outbound rows also have a **Value if empty**, and *No property (fixed value)* sends a value always. Rows are edited in place with searchable dropdowns; the screen warns about a target mapped twice and, outbound, about fields Salesforce requires to create a record. The jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown the object's fields, both sorted **alphabetically**.
   - **Triggers**: inbound, *On login* and the scheduled batch (cron builder with its schedule in plain words) and *Sync now*. Outbound, the **target object** (Lead or Contact), the triggers (*Profile updates* / *Form submissions*: turning one on starts the automatic push), the schedule (how often jCustomer is polled, every 5 minutes by default), then *Run now*: push the latest changes, or push one profile by email (Enter or *Push now*), with the result shown next to the button.
   - **History**: see below.
 

@@ -90,7 +90,8 @@
       "col": {
         "sfField": "Salesforce Field",
         "jcProperty": "jCustomer Property",
-        "sfFieldOf": "Salesforce field ({{object}})"
+        "sfFieldOf": "Salesforce field ({{object}})",
+        "defaultValue": "Value if empty"
       },
       "selectField": "Select a Salesforce field",
       "selectProperty": "Select a jCustomer property",
@@ -124,7 +125,11 @@
       "emptyMessage": {
         "inbound": "Add a row to copy a Salesforce field into a jCustomer property.",
         "outbound": "Add a row to send a jCustomer property to a Salesforce field."
-      }
+      },
+      "noProperty": "No property (fixed value)",
+      "defaultPlaceholder": "Value if empty (optional)",
+      "fixedPlaceholder": "Fixed value",
+      "defaultsHelp": "Value if empty is sent when the profile has no value for the property, for example Company = Web visitor so that a Lead can be created. With No property, the value is always sent. A profile is pushed only when at least one mapped property has a value."
     },
     "sync": {
       "title": "Last synchronisation",

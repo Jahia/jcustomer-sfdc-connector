@@ -52,6 +52,16 @@ public class SfdcApiClient {
         return type;
     }
 
+    /** A Salesforce record id: 15 or 18 letters and digits. Ids read from profiles are checked before a URL or a query. */
+    private static final Pattern SOBJECT_ID = Pattern.compile("[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?");
+
+    static String requireSObjectId(String id) {
+        if (id == null || !SOBJECT_ID.matcher(id).matches()) {
+            throw new IllegalArgumentException("Invalid Salesforce record id: " + id);
+        }
+        return id;
+    }
+
     private SfdcAuthService    authService;
     private ConnectorConfigService configService;
 
@@ -163,6 +173,36 @@ public class SfdcApiClient {
     }
 
     /**
+     * The Contact a Lead was converted to.
+     *
+     * @param leadId a Salesforce Lead id
+     * @return the {@code ConvertedContactId}, or {@code null} when the Lead is not converted or does not exist
+     */
+    public String findConvertedContactId(String leadId) throws Exception {
+        List<Map<String, Object>> rows = query("SELECT ConvertedContactId FROM Lead WHERE Id = '"
+                + requireSObjectId(leadId) + "' AND IsConverted = true LIMIT 1");
+        return rows.isEmpty() ? null : stringOrNull(rows.get(0).get("ConvertedContactId"));
+    }
+
+    /**
+     * The Contact of the most recently converted Lead with this email, so that a person who is already a
+     * Contact is not created again as a Lead.
+     *
+     * @return the {@code ConvertedContactId}, or {@code null} when no converted Lead has this email
+     */
+    public String findConvertedContactIdByEmail(String email) throws Exception {
+        if (email == null || email.isBlank()) return null;
+        String escaped = email.replace("\\", "\\\\").replace("'", "\\'");
+        List<Map<String, Object>> rows = query("SELECT ConvertedContactId FROM Lead WHERE Email = '" + escaped
+                + "' AND IsConverted = true AND ConvertedContactId != null ORDER BY ConvertedDate DESC LIMIT 1");
+        return rows.isEmpty() ? null : stringOrNull(rows.get(0).get("ConvertedContactId"));
+    }
+
+    private static String stringOrNull(Object o) {
+        return o == null || o.toString().isBlank() ? null : o.toString();
+    }
+
+    /**
      * Creates an sObject of the given type and returns the new record Id.
      * POST /services/data/{v}/sobjects/{type}
      */
@@ -183,6 +223,7 @@ public class SfdcApiClient {
      */
     public void updateSObject(String type, String id, Map<String, Object> fields) throws Exception {
         requireSObjectName(type);
+        requireSObjectId(id);
         String url = dataBaseUrl() + "/sobjects/" + type + "/" + id;
         HttpResponse<String> resp = writeJson("PATCH", url, new org.json.JSONObject(fields).toString());
         if (resp.statusCode() != 204 && resp.statusCode() != 200) {
