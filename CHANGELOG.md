@@ -4,6 +4,13 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.4] - 2026-10-24
+
+No change of behaviour: the bundle's manifest is identical to 2.6.3's.
+
+### Changed
+- **Faster builds.** `pom.xml` takes Jahia's classes from `jahia-impl` without the about 310 libraries it depends on, and declares the APIs the module compiles against (JCR, `org.json`, OSGi, Quartz, SLF4J, Servlet 3.1) at the versions `jahia-impl` 8.2.0.0 uses. The dependency tree goes from 345 to about 50 artifacts, so a build on an empty Maven repository, as on a new CI runner, no longer resolves hundreds of artifacts through four repositories. `org.quartz` is listed in the bundle's `Import-Package` instruction so that it stays a required import.
+
 ## [2.6.3] - 2026-10-24
 
 ### Added

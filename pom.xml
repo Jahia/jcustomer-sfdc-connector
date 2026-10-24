@@ -13,7 +13,7 @@
 
     <groupId>org.jahia.community.modules</groupId>
     <artifactId>jcustomer-sfdc-connector</artifactId>
-    <version>2.6.3</version>
+    <version>2.6.4</version>
     <packaging>bundle</packaging>
 
     <name>jCustomer - Salesforce Connector</name>
@@ -55,6 +55,85 @@
     </properties>
 
     <dependencies>
+        <!-- Jahia's own classes, without the ~310 libraries jahia-impl depends on: resolving them made a
+             build on an empty Maven repository (CI) take tens of minutes. The APIs this module compiles
+             against are declared below, at the versions jahia-impl 8.2.0.0 uses. The jahia-modules
+             parent declares jahia-impl too; this declaration replaces it. -->
+        <dependency>
+            <groupId>org.jahia.server</groupId>
+            <artifactId>jahia-impl</artifactId>
+            <version>8.2.0.0</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.jahia.server</groupId>
+            <artifactId>jahia-api</artifactId>
+            <version>8.2.0.0</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>javax.jcr</groupId>
+            <artifactId>jcr</artifactId>
+            <version>2.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20231013</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.osgi</groupId>
+            <artifactId>osgi.core</artifactId>
+            <version>7.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.osgi</groupId>
+            <artifactId>osgi.cmpn</artifactId>
+            <version>7.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.quartz-scheduler</groupId>
+            <artifactId>quartz</artifactId>
+            <version>1.8.6</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.36</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Servlet 3.1, as jahia-impl brings it (the parent's servlet-api is 3.0.1): keeps the
+             javax.servlet.http import range of earlier releases. -->
+        <dependency>
+            <groupId>org.jboss.spec.javax.servlet</groupId>
+            <artifactId>jboss-servlet-api_3.1_spec</artifactId>
+            <version>1.0.2.Final</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- jExperience: ContextServerService for jCustomer access -->
         <dependency>
             <groupId>org.jahia.modules</groupId>
@@ -154,6 +233,7 @@
                             org.jahia.settings,
                             org.jahia.osgi,
                             org.osgi.service.event,
+                            org.quartz,
                             java.net.http,
                             java.security,
                             java.security.spec,

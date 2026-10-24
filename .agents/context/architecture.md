@@ -4,6 +4,11 @@ An OSGi module (Java 17, Maven, parent `jahia-modules` 8.2.0.0) with a React 18 
 webpack Module Federation (`frontend-maven-plugin`). Package root:
 `org.jahia.community.modules.jcustomer.sfdc`.
 
+**Dependencies.** `jahia-impl` is declared with every transitive dependency excluded, and the APIs the
+code compiles against are declared one by one (`pom.xml`). Adding an import from a library not listed
+there fails the compile: declare the library at the version `jahia-impl` 8.2.0.0 uses, and compare the
+bundle manifest (`Import-Package` and its version ranges) with the previous release before merging.
+
 ## Components
 
 | Package | Classes | Role |
