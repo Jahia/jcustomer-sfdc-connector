@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ArrowRight, Banner, Button, Chip, DataTable, Delete, Download, Dropdown, EmptyData, Loader, Reload, Warning, Add
+    ArrowRight, Banner, Button, Chip, DataTable, Delete, Download, Dropdown, EmptyData, Input, Loader, Reload, Typography, Warning, Add
 } from '@jahia/moonstone';
 import {
     getSfdcFields, getJcProperties, getMapping, saveMapping, getOutboundMapping, saveOutboundMapping
@@ -16,20 +16,25 @@ const NS = 'jcustomer-sfdc-connector';
 /**
  * Per direction: the Salesforce objects it maps, its API, and which side is the source (shown first).
  * requiredToCreate: Salesforce's own rule for creating a record (outbound only: inbound never creates).
+ * defaults: rows have a value sent when the jCustomer property is empty, or always without a property
+ * (outbound only).
  */
 const CONFIG = {
     inbound: {
         objects: ['Contact', 'Account', 'Lead'], load: getMapping, save: saveMapping,
-        columns: ['sfField', 'jcProperty'], target: 'jcProperty', requiredToCreate: {}
+        columns: ['sfField', 'jcProperty'], target: 'jcProperty', requiredToCreate: {}, defaults: false
     },
     outbound: {
         objects: ['Lead', 'Contact'], load: getOutboundMapping, save: saveOutboundMapping,
-        columns: ['jcProperty', 'sfField'], target: 'sfField', requiredToCreate: { Lead: ['LastName', 'Company'], Contact: ['LastName'] }
+        columns: ['jcProperty', 'sfField'], target: 'sfField', requiredToCreate: { Lead: ['LastName', 'Company'], Contact: ['LastName'] },
+        defaults: true
     }
 };
 
 const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
-const snapshot = rows => JSON.stringify((rows || []).map(r => [r.sfField || '', r.jcProperty || '']));
+const snapshot = rows => JSON.stringify((rows || []).map(r => [r.sfField || '', r.jcProperty || '', r.defaultValue || '']));
+/** A row maps something: a Salesforce field fed by a property, a default value, or both. */
+const isMapped = r => !!(r.sfField && (r.jcProperty || r.defaultValue));
 
 /** Keeps a stored value visible even when it is not in the loaded options (e.g. Salesforce unreachable). */
 const withValue = (options, value) => (!value || options.some(o => o.value === value)
@@ -45,7 +50,7 @@ export default function MappingEditor({ direction }) {
     const cfg = CONFIG[direction];
     const nextId = useRef(0);
     const withIds = rows => (Array.isArray(rows) ? rows : []).map(r => ({
-        _id: `r${nextId.current++}`, sfField: r.sfField || '', jcProperty: r.jcProperty || ''
+        _id: `r${nextId.current++}`, sfField: r.sfField || '', jcProperty: r.jcProperty || '', defaultValue: r.defaultValue || ''
     }));
 
     const [object,   setObject]   = useState(cfg.objects[0]);
@@ -91,7 +96,9 @@ export default function MappingEditor({ direction }) {
     const handleSave = async () => {
         setSaving(true); setBanner(null);
         try {
-            const mappings = current.map(({ sfField, jcProperty }) => ({ sfField, jcProperty }));
+            const mappings = current.map(({ sfField, jcProperty, defaultValue }) => (cfg.defaults
+                ? { sfField, jcProperty, defaultValue: (defaultValue || '').trim() }
+                : { sfField, jcProperty }));
             await cfg.save({ sfObject: object, mappings });
             setSaved(s => ({ ...s, [object]: snapshot(mappings) }));
             setBanner({ variant: 'info', title: t(`${NS}:mapping.savedFor`, { object }) });
@@ -113,19 +120,23 @@ export default function MappingEditor({ direction }) {
         label: `${f.label || f.name} (${f.name})`,
         value: object === 'Account' && !f.name.startsWith('Account.') ? `Account.${f.name}` : f.name
     })).sort(byLabel);
-    const optionsFor = key => (key === 'sfField' ? sfOptions : jcOptions);
+    // Outbound, a row may have no property: its default value is then a fixed value.
+    const noProperty = { label: t(`${NS}:mapping.noProperty`), value: '' };
+    const optionsFor = key => (key === 'sfField' ? sfOptions : (cfg.defaults ? [noProperty, ...jcOptions] : jcOptions));
 
     // Checks
     const targets = current.map(r => r[cfg.target]).filter(Boolean);
     const duplicates = [...new Set(targets.filter((v, i) => targets.indexOf(v) !== i))];
-    const mapped = new Set(current.map(r => r.sfField));
+    const mapped = new Set(current.filter(isMapped).map(r => r.sfField));
     const missingRequired = (cfg.requiredToCreate[object] || []).filter(f => !mapped.has(f));
 
     // DataTable rows are wrapping flex rows: the widths must add up to 100% exactly, or the last
-    // cell wraps under the first one. The two field columns share what the arrow and remove leave.
+    // cell wraps under the first one. The field columns (and the default value) share what the arrow
+    // and remove leave.
+    const fluid = `calc((100% - 88px) / ${cfg.defaults ? 3 : 2})`;
     const fieldColumn = key => ({
         key,
-        width: 'calc((100% - 88px) / 2)',
+        width: fluid,
         label: key === 'sfField' ? t(`${NS}:mapping.col.sfFieldOf`, { object }) : t(`${NS}:mapping.col.jcProperty`),
         render: cell((v, row) => (
             <div className={classes.cellControl}>
@@ -142,6 +153,17 @@ export default function MappingEditor({ direction }) {
         fieldColumn(cfg.columns[0]),
         { key: 'arrow', label: '', width: '32px', render: cell(() => <ArrowRight />) },
         fieldColumn(cfg.columns[1]),
+        ...(cfg.defaults ? [{
+            key: 'defaultValue', width: fluid, label: t(`${NS}:mapping.col.defaultValue`),
+            render: cell((v, row) => (
+                <div className={classes.cellControl}>
+                    <Input id={`sfdc-default-${row._id}`} size="small" value={row.defaultValue || ''}
+                        aria-label={t(`${NS}:mapping.col.defaultValue`)}
+                        placeholder={t(`${NS}:${row.jcProperty ? 'mapping.defaultPlaceholder' : 'mapping.fixedPlaceholder'}`)}
+                        onChange={e => update(row._id, 'defaultValue', e.target.value)} />
+                </div>
+            ))
+        }] : []),
         {
             key: 'remove', label: '', width: '56px', align: 'right',
             render: cell((v, row) => <Button variant="ghost" color="danger" icon={<Delete />}
@@ -165,7 +187,7 @@ export default function MappingEditor({ direction }) {
             <Section title={t(`${NS}:mapping.title.${direction}`)} description={t(`${NS}:mapping.subtitle.${direction}`)} actions={actions}>
                 <div className={classes.row}>
                     {cfg.objects.map(o => {
-                        const count = (rows[o] || []).filter(r => r.sfField && r.jcProperty).length;
+                        const count = (rows[o] || []).filter(isMapped).length;
                         return (
                             <Button key={o}
                                 variant={o === object ? 'default' : 'ghost'} color={o === object ? 'accent' : 'default'}
@@ -185,6 +207,9 @@ export default function MappingEditor({ direction }) {
                         title={t(`${NS}:mapping.required.title`, { object })}>
                         <span>{t(`${NS}:outbound.mapping.requiredHint`, { obj: object, fields: missingRequired.join(', ') })}</span>
                     </Banner>
+                )}
+                {cfg.defaults && (
+                    <Typography variant="caption">{t(`${NS}:mapping.defaultsHelp`)}</Typography>
                 )}
                 {duplicates.length > 0 && (
                     <Banner variant="warning" iconStart={<Warning />} title={t(`${NS}:mapping.duplicates`, { fields: duplicates.join(', ') })}>

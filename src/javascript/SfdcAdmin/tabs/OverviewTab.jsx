@@ -18,7 +18,7 @@ const value = r => (r.status === 'fulfilled' ? r.value : null);
 
 /** Number of complete mapping rows (both sides set) per object. */
 const coverage = (mapping, objects) => objects.map(o => [o,
-    (Array.isArray(mapping?.[o]) ? mapping[o] : []).filter(r => r.sfField && r.jcProperty).length]);
+    (Array.isArray(mapping?.[o]) ? mapping[o] : []).filter(r => r.sfField && (r.jcProperty || r.defaultValue)).length]);
 
 /** Result chips of a recorded run, or a caption when it touched nobody. */
 const RunChips = ({ run, t }) => {

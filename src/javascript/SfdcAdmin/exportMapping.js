@@ -1,11 +1,12 @@
 /**
  * Client-side export of a single object's field mapping to CSV or JSON.
  *
- * The mapping rows are already loaded in the tab's state ({ jcProperty, sfField } per row),
+ * The mapping rows are already loaded in the tab's state ({ jcProperty, sfField, defaultValue? } per row),
  * so export is done entirely in the browser (Blob download) - no backend action, no CSRF surface.
  *
  * `direction` is 'inbound' (SFDC -> jCustomer) or 'outbound' (jCustomer -> SFDC); `object` is the
- * Salesforce object name (Contact / Account / Lead). Only complete rows (both fields set) are exported.
+ * Salesforce object name (Contact / Account / Lead). Only complete rows are exported: a Salesforce field
+ * fed by a property, a default value (outbound), or both.
  */
 
 // RFC 4180: quote a field if it contains a comma, quote, CR or LF; double any embedded quotes.
@@ -15,15 +16,30 @@ export const csvCell = v => {
 };
 
 const completeRows = rows => (Array.isArray(rows) ? rows : [])
-    .map(r => ({ jcProperty: (r.jcProperty || '').trim(), sfField: (r.sfField || '').trim() }))
-    .filter(r => r.jcProperty && r.sfField);
+    .map(r => ({
+        jcProperty: (r.jcProperty || '').trim(),
+        sfField: (r.sfField || '').trim(),
+        defaultValue: (r.defaultValue || '').trim()
+    }))
+    .filter(r => r.sfField && (r.jcProperty || r.defaultValue));
+
+/** Rows as exported: defaultValue only when the direction has default values (any row sets one). */
+const exported = rows => {
+    const complete = completeRows(rows);
+    const withDefaults = complete.some(r => r.defaultValue);
+    return {
+        withDefaults,
+        rows: complete.map(r => (withDefaults ? r : { jcProperty: r.jcProperty, sfField: r.sfField }))
+    };
+};
 
 const baseName = (direction, object) => `sfdc-${direction}-${object}-mapping`;
 
 /** Serialize the given rows to CSV text (header + one line per complete mapping). */
 export const toCsv = rows => {
-    const lines = ['jcProperty,sfField'];
-    completeRows(rows).forEach(r => lines.push(`${csvCell(r.jcProperty)},${csvCell(r.sfField)}`));
+    const { withDefaults, rows: out } = exported(rows);
+    const lines = [withDefaults ? 'jcProperty,sfField,defaultValue' : 'jcProperty,sfField'];
+    out.forEach(r => lines.push([r.jcProperty, r.sfField, ...(withDefaults ? [r.defaultValue] : [])].map(csvCell).join(',')));
     // Trailing newline so POSIX tools treat the last row as a complete line.
     return lines.join('\r\n') + '\r\n';
 };
@@ -33,7 +49,7 @@ export const toJson = (direction, object, rows) => JSON.stringify({
     direction,
     object,
     exportedAt: new Date().toISOString(),
-    mappings: completeRows(rows)
+    mappings: exported(rows).rows
 }, null, 2);
 
 /** Trigger a browser download of `content` under `filename` with the given MIME type. */

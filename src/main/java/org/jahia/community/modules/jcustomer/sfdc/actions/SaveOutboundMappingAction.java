@@ -22,7 +22,8 @@ import java.util.Map;
 /**
  * Saves the outbound (jCustomer → SFDC) field mapping for a given SF object.
  * POST *.saveOutboundMapping.do
- * Body (JSON): { "sfObject": "Lead", "mappings": [ { jcProperty, sfField, required? } ] }
+ * Body (JSON): { "sfObject": "Lead", "mappings": [ { jcProperty, sfField, required?, defaultValue? } ] }
+ * {@code defaultValue} is sent when the jCustomer property is empty; a row without {@code jcProperty} sends it always.
  */
 @Component(service = Action.class, immediate = true)
 public class SaveOutboundMappingAction extends AbstractSfdcAdminAction {
@@ -47,6 +48,8 @@ public class SaveOutboundMappingAction extends AbstractSfdcAdminAction {
                 entry.put("jcProperty", m.optString("jcProperty"));
                 entry.put("sfField",    m.optString("sfField"));
                 if (m.has("required")) entry.put("required", m.optString("required"));
+                String defaultValue = m.optString("defaultValue", "").trim();   // used when the property is empty
+                if (!defaultValue.isEmpty()) entry.put("defaultValue", defaultValue);
                 mappings.add(entry);
             }
 

@@ -365,20 +365,48 @@ public class SfdcOutboundSyncService {
         return pushToObject(object, profile, props, profileId, email, mapping, siteKey, run);
     }
 
+    /** Salesforce fields of one push, and how many of them came from the profile (not a default value). */
+    static final class Fields {
+        final Map<String, Object> values = new HashMap<>();
+        int fromProfile;
+    }
+
+    /**
+     * Applies a mapping to a profile. A row sends its jCustomer property; when the property is empty,
+     * its {@code defaultValue}; a row without a property sends its {@code defaultValue} always (a fixed
+     * value). An empty property without a default is sent empty, as before default values existed.
+     */
+    static Fields buildFields(List<Map<String, String>> mapping, Map<String, Object> props) {
+        Fields f = new Fields();
+        for (Map<String, String> m : mapping) {
+            String sfField = m.get("sfField");
+            if (isBlank(sfField)) continue;
+            String jcProp = m.get("jcProperty");
+            String defaultValue = m.get("defaultValue");
+            Object raw = isBlank(jcProp) ? null : props.get(jcProp);
+            Object value = raw == null ? null : toSfValue(raw);
+            if (!isBlank(value)) {
+                f.values.put(sfField, value);
+                f.fromProfile++;
+            } else if (!isBlank(defaultValue)) {
+                f.values.put(sfField, defaultValue);
+            } else if (value != null) {
+                f.values.put(sfField, value);
+                f.fromProfile++;
+            }
+        }
+        return f;
+    }
+
     /** Pushes the profile to one Salesforce object type. */
     private PushResult pushToObject(String object, Map<String, Object> profile, Map<String, Object> props,
                                  String profileId, String email, List<Map<String, String>> mapping,
                                  String siteKey, Run run) throws Exception {
-        // Build the field set from the mapping
-        Map<String, Object> fields = new HashMap<>();
-        for (Map<String, String> m : mapping) {
-            String jcProp  = m.get("jcProperty");
-            String sfField = m.get("sfField");
-            if (jcProp == null || sfField == null || jcProp.isBlank() || sfField.isBlank()) continue;
-            Object value = props.get(jcProp);
-            if (value != null) fields.put(sfField, toSfValue(value));
-        }
-        if (fields.isEmpty()) {
+        // Build the field set from the mapping. Default values alone never make a push: at least one
+        // value must come from the profile.
+        Fields built = buildFields(mapping, props);
+        Map<String, Object> fields = built.values;
+        if (built.fromProfile == 0) {
             logger.debug("[SFDC-Outbound] Profile {} has no mapped {} values", profileId, object);
             rec(run, Outcome.SKIPPED, email, profileId, object, null, null, "no mapped jCustomer property has a value");
             return PushResult.SKIPPED;
@@ -394,9 +422,29 @@ public class SfdcOutboundSyncService {
 
         boolean created = false;
         if (recordId != null && !recordId.isBlank()) {
-            apiClient.updateSObject(object, recordId, fields);
+            try {
+                apiClient.updateSObject(object, recordId, fields);
+            } catch (Exception e) {
+                // Salesforce refuses any update of a converted Lead: the person is now its Contact.
+                String contactId = null;
+                if ("Lead".equals(object)) {
+                    try {
+                        contactId = apiClient.findConvertedContactId(recordId);
+                    } catch (Exception lookup) {
+                        e.addSuppressed(lookup);                    // report the update failure, not the lookup
+                    }
+                }
+                if (contactId == null) throw e;
+                return pushToConvertedContact(contactId, recordId, fields, props, profileId, email, siteKey, run);
+            }
             logger.info("[SFDC-Outbound] Updated {} {} from profile {} ({} fields)", object, recordId, profileId, fields.size());
         } else {
+            // A Lead converted earlier has no open Lead left to match: update its Contact, never create
+            // the person again as a new Lead.
+            String contactId = "Lead".equals(object) ? apiClient.findConvertedContactIdByEmail(email) : null;
+            if (contactId != null) {
+                return pushToConvertedContact(contactId, null, fields, props, profileId, email, siteKey, run);
+            }
             // Salesforce requires certain fields to CREATE each object.
             for (String req : REQUIRED_FOR_CREATE.getOrDefault(object, new String[0])) {
                 if (isBlank(fields.get(req))) {
@@ -415,23 +463,88 @@ public class SfdcOutboundSyncService {
             logger.info("[SFDC-Outbound] Created {} {} from profile {} ({} fields)", object, recordId, profileId, fields.size());
         }
 
-        // Persist the record id back onto the profile for future idempotent pushes
-        String note = null;
-        if (recordId != null && !recordId.isBlank() && profileId != null
-                && !recordId.equals(asString(props.get(idProp)))) {
-            try {
-                profileService.updateProfile(profileId, Map.of(idProp, recordId), siteKey);
-            } catch (Exception e) {
-                // The Salesforce write succeeded; only the id writeback failed. Matching by email still
-                // works on the next push, so report it without failing this one.
-                logger.warn("[SFDC-Outbound] {} {} saved, but writing {} back to profile {} failed: {}",
-                        object, recordId, idProp, profileId, e.getMessage());
-                note = "saved in Salesforce, but writing " + idProp + " back to the profile failed: " + e.getMessage();
-            }
-        }
+        String note = writeBackId(idProp, recordId, props, profileId, object, siteKey);
         rec(run, created ? Outcome.CREATED : Outcome.UPDATED, email, profileId, object, recordId, fields, note);
         return created ? PushResult.CREATED : PushResult.UPDATED;
     }
+
+    /**
+     * Updates the Contact a Lead was converted to. The Contact gets the outbound Contact mapping when one
+     * is configured; otherwise the fields of the Lead push that Contact also has ({@code Company}, for
+     * one, is not on Contact). The Contact id is written back as {@code SFDC_ContactId}.
+     *
+     * @param leadId     the converted Lead when known (stored on the profile), or {@code null}
+     * @param leadFields the fields built from the Lead mapping
+     */
+    private PushResult pushToConvertedContact(String contactId, String leadId, Map<String, Object> leadFields,
+                                              Map<String, Object> props, String profileId, String email,
+                                              String siteKey, Run run) throws Exception {
+        String converted = leadId != null ? "Lead " + leadId + " was converted to this Contact"
+                                          : "this person's Lead was converted to this Contact";
+        Map<String, Object> fields;
+        List<Map<String, String>> contactMapping = configService.loadOutboundMapping("Contact");
+        if (!contactMapping.isEmpty()) {
+            Fields built = buildFields(contactMapping, props);
+            fields = built.fromProfile > 0 ? built.values : Map.of();
+        } else {
+            Set<String> contactFields = contactFieldNames();
+            fields = new HashMap<>();
+            leadFields.forEach((k, v) -> { if (contactFields.contains(k)) fields.put(k, v); });
+        }
+        if (fields.isEmpty()) {
+            rec(run, Outcome.SKIPPED, email, profileId, "Contact", contactId, null, converted
+                    + ": none of the mapped fields exists on Contact. Map Contact fields in the Mapping tab to keep it updated.");
+            return PushResult.SKIPPED;
+        }
+        apiClient.updateSObject("Contact", contactId, fields);
+        logger.info("[SFDC-Outbound] Updated Contact {} from profile {} ({} fields): {}", contactId, profileId, fields.size(), converted);
+        String note = writeBackId("SFDC_ContactId", contactId, props, profileId, "Contact", siteKey);
+        rec(run, Outcome.UPDATED, email, profileId, "Contact", contactId, fields, note == null ? converted : converted + "; " + note);
+        return PushResult.UPDATED;
+    }
+
+    /**
+     * Writes a Salesforce record id back onto the profile so later pushes update the same record.
+     *
+     * @return a note for the history when the write failed (the Salesforce write itself succeeded), else {@code null}
+     */
+    private String writeBackId(String idProp, String recordId, Map<String, Object> props, String profileId,
+                               String object, String siteKey) {
+        if (recordId == null || recordId.isBlank() || profileId == null || recordId.equals(asString(props.get(idProp)))) {
+            return null;
+        }
+        try {
+            profileService.updateProfile(profileId, Map.of(idProp, recordId), siteKey);
+            return null;
+        } catch (Exception e) {
+            // Matching by email still works on the next push, so report it without failing this one.
+            logger.warn("[SFDC-Outbound] {} {} saved, but writing {} back to profile {} failed: {}",
+                    object, recordId, idProp, profileId, e.getMessage());
+            return "saved in Salesforce, but writing " + idProp + " back to the profile failed: " + e.getMessage();
+        }
+    }
+
+    /** Field names of Salesforce's Contact object, cached for {@link #FIELD_CACHE_MS}. */
+    private Set<String> contactFieldNames() throws Exception {
+        CachedFields c = contactFields;
+        if (c == null || System.currentTimeMillis() - c.loadedAt > FIELD_CACHE_MS) {
+            Set<String> names = new HashSet<>();
+            for (Map<String, String> f : apiClient.describeObject("Contact")) names.add(f.get("name"));
+            c = new CachedFields(names);
+            contactFields = c;
+        }
+        return c.names;
+    }
+
+    private static final long FIELD_CACHE_MS = 10 * 60 * 1000L;
+
+    private static final class CachedFields {
+        final Set<String> names;
+        final long loadedAt = System.currentTimeMillis();
+        CachedFields(Set<String> names) { this.names = names; }
+    }
+
+    private volatile CachedFields contactFields;
 
     // ── helpers ──────────────────────────────────────────────────────────────
 

@@ -16,10 +16,12 @@
  - enabled (boolean) = false
 
 // One field mapping entry: jCustomer property to Salesforce field. Shared by inbound and outbound.
+// defaultValue (outbound only): sent when the jCustomer property is empty; without a property, a fixed value.
 [jcsfdcnt:fieldMapping] > jnt:content
  - sfField (string)
  - jcProperty (string)
  - required (boolean) = false
+ - defaultValue (string)
 
 // Ordered list of field mappings for one Salesforce object
 [jcsfdcnt:objectMapping] > jnt:content orderable

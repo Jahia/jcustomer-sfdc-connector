@@ -13,7 +13,7 @@
 
     <groupId>org.jahia.community.modules</groupId>
     <artifactId>jcustomer-sfdc-connector</artifactId>
-    <version>2.6.1</version>
+    <version>2.6.2</version>
     <packaging>bundle</packaging>
 
     <name>jCustomer - Salesforce Connector</name>
@@ -69,6 +69,14 @@
             <artifactId>unomi-api</artifactId>
             <version>3.0.0</version>
             <scope>provided</scope>
+        </dependency>
+
+        <!-- Unit tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

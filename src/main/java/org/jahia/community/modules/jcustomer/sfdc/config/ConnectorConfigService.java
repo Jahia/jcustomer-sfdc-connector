@@ -152,6 +152,7 @@ public class ConnectorConfigService {
                     if (m.hasProperty("sfField"))    entry.put("sfField",    m.getProperty("sfField").getString());
                     if (m.hasProperty("jcProperty")) entry.put("jcProperty", m.getProperty("jcProperty").getString());
                     if (m.hasProperty("required"))   entry.put("required",   m.getProperty("required").getString());
+                    if (m.hasProperty("defaultValue")) entry.put("defaultValue", m.getProperty("defaultValue").getString());
                     entry.put("id", m.getName());
                     result.add(entry);
                 }
@@ -174,6 +175,8 @@ public class ConnectorConfigService {
                 if (m.containsKey("sfField"))    node.setProperty("sfField",    orEmpty(m.get("sfField")));
                 if (m.containsKey("jcProperty")) node.setProperty("jcProperty", orEmpty(m.get("jcProperty")));
                 if (m.containsKey("required"))   node.setProperty("required",   toBool(m.get("required")));
+                String defaultValue = m.get("defaultValue");
+                if (defaultValue != null && !defaultValue.isBlank()) node.setProperty("defaultValue", defaultValue);
                 i++;
             }
             session.save();

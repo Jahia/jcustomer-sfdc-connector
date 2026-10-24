@@ -4,6 +4,16 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-10-24
+
+### Added
+- **Default and fixed values in the outbound mapping.** Each jCustomer to Salesforce row has a *Value if empty*, sent when the profile has no value for the property: `Company` = *Web visitor* lets a Lead be created for visitors who gave no company, where they were skipped on every poll. A row with *No property (fixed value)* sends its value always (`LeadSource` = *Web*). A profile is pushed only when at least one mapped property has a value. Exports include the column. Stored as `defaultValue` on the mapping row (`jcsfdcnt:fieldMapping`).
+- Unit tests (JUnit 5), run by the build.
+
+### Fixed
+- **Converted Leads.** Once Salesforce converted a person's Lead to a Contact, every push failed (Salesforce refuses updates of a converted Lead), and a profile without a stored Lead id created a duplicate Lead. With the target Lead, the push now updates the Contact the Lead was converted to, with the outbound Contact mapping when one is configured, otherwise the fields of the Lead mapping that Contact also has; the Contact id is written back as `SFDC_ContactId` and the History tab says which Lead was converted.
+- Salesforce record ids read from profiles are checked (15 or 18 letters and digits) before they reach a request URL or a query.
+
 ## [2.6.1] - 2026-10-24
 
 ### Fixed

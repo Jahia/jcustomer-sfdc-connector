@@ -90,7 +90,8 @@
       "col": {
         "sfField": "Champ Salesforce",
         "jcProperty": "Propriété jCustomer",
-        "sfFieldOf": "Champ Salesforce ({{object}})"
+        "sfFieldOf": "Champ Salesforce ({{object}})",
+        "defaultValue": "Valeur si vide"
       },
       "selectField": "Sélectionner un champ Salesforce",
       "selectProperty": "Sélectionner une propriété jCustomer",
@@ -124,7 +125,11 @@
       "emptyMessage": {
         "inbound": "Ajoutez une ligne pour copier un champ Salesforce dans une propriété jCustomer.",
         "outbound": "Ajoutez une ligne pour envoyer une propriété jCustomer vers un champ Salesforce."
-      }
+      },
+      "noProperty": "Aucune propriété (valeur fixe)",
+      "defaultPlaceholder": "Valeur si vide (facultatif)",
+      "fixedPlaceholder": "Valeur fixe",
+      "defaultsHelp": "La valeur si vide est envoyée quand le profil n'a pas de valeur pour la propriété, par exemple Société = Visiteur web pour qu'une piste puisse être créée. Avec Aucune propriété, la valeur est toujours envoyée. Un profil n'est envoyé que si au moins une propriété mise en correspondance a une valeur."
     },
     "sync": {
       "title": "Dernière synchronisation",
