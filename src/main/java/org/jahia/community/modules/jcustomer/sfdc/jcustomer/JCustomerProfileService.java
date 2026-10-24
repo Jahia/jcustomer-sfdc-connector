@@ -13,10 +13,13 @@ import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Finds and updates jCustomer (Apache Unomi) profiles.
@@ -44,6 +47,18 @@ public class JCustomerProfileService {
     /** Bits of the {@code updated} value returned by the event collector (Unomi {@code EventService}). */
     private static final int    UNOMI_ERROR           = 1;
     private static final int    UNOMI_PROFILE_UPDATED = 4;
+
+    /** How long the multi-valued property names read from jCustomer are reused, per site. */
+    private static final long   PROPERTY_TYPES_TTL_MS = 5 * 60 * 1000L;
+    /** Salesforce separates the values of a multi-select picklist with ";". */
+    private static final String SF_MULTI_SEPARATOR    = ";";
+
+    private static final class MultiValued {
+        final Set<String> names;
+        final long loadedAt;
+        MultiValued(Set<String> names, long loadedAt) { this.names = names; this.loadedAt = loadedAt; }
+    }
+    private final Map<String, MultiValued> multiValuedBySite = new ConcurrentHashMap<>();
 
     private volatile ContextServerService      contextServerService;
     private volatile JExperienceConfigFactory  jexperienceConfig;
@@ -92,6 +107,70 @@ public class JCustomerProfileService {
     // ── Profile update ────────────────────────────────────────────────────────
 
     /**
+     * Gives each value the shape its jCustomer property type expects: a list for a multi-valued property
+     * (a Salesforce multi-select picklist "a;b" is split, a single value becomes a one-item list), the
+     * value unchanged for a single-valued one. jCustomer stores whatever it is sent: a text written to a
+     * multi-valued property stays a text, which jExperience shows as empty and list conditions never match.
+     * When the property types cannot be read, a value containing ";" is split, as before.
+     *
+     * @param properties jCustomer property name → value as read from Salesforce
+     * @param siteKey    site whose jExperience settings select the jCustomer instance
+     * @return a new map with the shaped values
+     */
+    public Map<String, Object> shapeForPropertyTypes(Map<String, Object> properties, String siteKey) {
+        Set<String> multi = multiValuedProperties(siteKey);
+        Map<String, Object> shaped = new HashMap<>();
+        properties.forEach((k, v) -> {
+            boolean isMulti = multi != null ? multi.contains(k)
+                    : v instanceof String && ((String) v).contains(SF_MULTI_SEPARATOR);
+            shaped.put(k, isMulti ? asList(v) : v);
+        });
+        return shaped;
+    }
+
+    private static List<String> asList(Object v) {
+        List<String> out = new ArrayList<>();
+        if (v instanceof Collection) {
+            for (Object o : (Collection<?>) v) if (o != null && !o.toString().isBlank()) out.add(o.toString().trim());
+            return out;
+        }
+        for (String part : String.valueOf(v).split(SF_MULTI_SEPARATOR)) {
+            if (!part.isBlank()) out.add(part.trim());
+        }
+        return out;
+    }
+
+    /**
+     * Names of the multi-valued profile properties of the site's jCustomer, read through jExperience and
+     * reused for {@value #PROPERTY_TYPES_TTL_MS} ms; {@code null} when they cannot be read.
+     */
+    @SuppressWarnings("unchecked")
+    private Set<String> multiValuedProperties(String siteKey) {
+        MultiValued cached = multiValuedBySite.get(siteKey);
+        if (cached != null && System.currentTimeMillis() - cached.loadedAt < PROPERTY_TYPES_TTL_MS) {
+            return cached.names;
+        }
+        try {
+            List<Object> types = contextServerService.executeGetRequest(
+                    siteKey, "/cxs/profiles/properties/targets/profiles", null, null, List.class);
+            if (types == null) return cached != null ? cached.names : null;
+            Set<String> names = new HashSet<>();
+            for (Object t : types) {
+                if (!(t instanceof Map)) continue;
+                Map<String, Object> type = (Map<String, Object>) t;
+                if (Boolean.TRUE.equals(type.get("multivalued")) && type.get("itemId") != null) {
+                    names.add(type.get("itemId").toString());
+                }
+            }
+            multiValuedBySite.put(siteKey, new MultiValued(names, System.currentTimeMillis()));
+            return names;
+        } catch (Exception e) {
+            logger.warn("[JC-Profile] Could not read jCustomer property types for site {}: {}", siteKey, e.getMessage());
+            return cached != null ? cached.names : null;
+        }
+    }
+
+    /**
      * Returns the entries of {@code properties} whose value differs from the one the profile holds, so
      * only real changes are sent (and reported). Values compare as text, element by element for lists,
      * because jCustomer may return a number or a single value where Salesforce sent text.
@@ -112,6 +191,9 @@ public class JCustomerProfileService {
     }
 
     private static boolean sameValue(Object stored, Object value) {
+        // A list to write never matches a stored text: a multi-valued property holding a plain text
+        // (written before 2.5.0) must be rewritten as a list.
+        if (value instanceof Collection && stored != null && !(stored instanceof Collection)) return false;
         return Objects.equals(asText(stored), asText(value));
     }
 

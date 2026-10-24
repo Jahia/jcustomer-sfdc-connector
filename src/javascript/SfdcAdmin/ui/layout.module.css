@@ -1,0 +1,166 @@
+/* Layout only: spacing and arrangement. Colours, type and controls come from Moonstone components. */
+
+/* Spacing uses Moonstone's tokens; LayoutContent already pads the page. */
+.page {
+    box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-large);
+    max-width: 1200px;
+    min-width: 0;
+}
+
+/* Moonstone spaces stacked Papers with a margin; inside our flex and grid containers the gap does it. */
+.page > :global(.moonstone-paper) + :global(.moonstone-paper),
+.stack > :global(.moonstone-paper) + :global(.moonstone-paper),
+.grid2 > :global(.moonstone-paper) + :global(.moonstone-paper) {
+    margin-top: 0;
+}
+
+/* Header tabs stay on one line and scroll: the Header has a fixed height, so a wrapped tab would
+   fall under the content and could not be clicked. */
+.tabsScroll {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+
+.tabsScroll > * {
+    flex-wrap: nowrap;
+    width: max-content;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-medium);
+}
+
+.grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: var(--moon-spacing-medium);
+}
+
+.sectionHead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--moon-spacing-medium);
+    flex-wrap: wrap;
+}
+
+.sectionTitle {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 280px;
+}
+
+.sectionBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-medium);
+    margin-top: var(--moon-spacing-medium);
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: var(--moon-spacing-small);
+    flex-wrap: wrap;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--moon-spacing-small);
+    flex-wrap: wrap;
+}
+
+.settingRow {
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-small);
+}
+
+.settingMain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--moon-spacing-medium);
+}
+
+/* The text takes the room; in a narrow pane a wide control drops under it instead of squeezing it. */
+.settingText {
+    display: flex;
+    flex: 1 1 240px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.settingControl {
+    flex-shrink: 0;
+    max-width: 100%;
+}
+
+/* An input and its button on one line, in a setting row's control slot. */
+.inlineForm {
+    display: flex;
+    align-items: center;
+    gap: var(--moon-spacing-small);
+    max-width: 100%;
+}
+
+.inlineInput {
+    width: 280px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.settingExtra {
+    padding-left: var(--moon-spacing-medium);
+}
+
+.fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    gap: var(--moon-spacing-medium);
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: var(--moon-spacing-medium);
+    row-gap: var(--moon-spacing-small);
+    align-items: center;
+}
+
+.cellControl {
+    width: 100%;
+    min-width: 180px;
+}
+
+/* A wide table scrolls inside its card instead of widening the page; below its minimum width
+   Moonstone's DataTable would squeeze the cells until their content overlaps. */
+.tableScroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.tableScroll > * {
+    min-width: 560px;
+}
+
+.center {
+    display: flex;
+    justify-content: center;
+    padding: 48px;
+}

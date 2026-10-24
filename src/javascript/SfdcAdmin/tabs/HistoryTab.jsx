@@ -1,26 +1,24 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Button, Chip, DataTable, Delete, Download, Loader, Reload, Separator, Typography
+    Banner, Button, Chip, DataTable, Delete, Download, EmptyData, Loader, Reload, Tooltip, Typography
 } from '@jahia/moonstone';
 import { getSyncHistory, getSyncHistoryRun, exportSyncHistory, purgeSyncHistory } from '../api';
 import { exportHistoryCsv, exportHistoryJson } from '../exportHistory';
-import classes from './MappingTab.module.css';
+import classes from './HistoryTab.module.css';
+import layout from '../ui/layout.module.css';
+import { Section } from '../ui/Section';
+import { cell } from '../ui/table';
+import { absoluteTime, relativeTime } from '../ui/format';
 
 const NS = 'jcustomer-sfdc-connector';
 const OUTCOME_COLOR = { created: 'success', updated: 'accent', skipped: 'warning', error: 'danger' };
+// Widths add up to 100%: DataTable rows are wrapping flex rows. Details (the changed fields) get the most room.
+const WIDTHS = { when: '26%', what: '14%', result: '22%', detail: '38%' };
 const COUNTS = [
     ['created', 'success'], ['updated', 'accent'], ['skipped', 'warning'], ['errors', 'danger']
 ];
 
-/**
- * Column render adapter. The UI runs on the host's Moonstone (Module Federation singleton), and
- * DataTable changed its column contract: up to 2.19 it calls render(value, row), from 2.20 render({ id,
- * value, data, meta }). Accept both, so the tab works whichever version jContent ships.
- */
-const cell = fn => (a, b) => (b === undefined && a && typeof a === 'object' && 'meta' in a && 'data' in a
-    ? fn(a.value, a.data)
-    : fn(a, b));
 
 /**
  * Rendered in the placeholder sub-row of a run. That row only mounts when the run is expanded, so this
@@ -28,6 +26,18 @@ const cell = fn => (a, b) => (b === undefined && a && typeof a === 'object' && '
  * isStructured/subRows: the UI uses the host's Moonstone at runtime (Module Federation singleton), and
  * renderRow / onExpandChange differ between Moonstone versions.
  */
+/** One changed field, stored as "Name=value": the name in bold, the value after it. */
+const FieldLine = ({ field }) => {
+    const at = field.indexOf('=');
+    if (at < 1) return <Typography variant="caption" className={classes.wrapAny}>{field}</Typography>;
+    return (
+        <Typography variant="caption" className={classes.wrapAny}>
+            <Typography component="span" variant="caption" weight="bold">{field.slice(0, at)}</Typography>
+            {' '}{field.slice(at + 1)}
+        </Typography>
+    );
+};
+
 const RecordsLoader = ({ runId, onLoad }) => {
     useEffect(() => { onLoad(runId); }, [runId, onLoad]);
     return <Loader size="small" />;
@@ -40,7 +50,7 @@ const RecordsLoader = ({ runId, onLoad }) => {
  * @param direction 'inbound' (Salesforce -> jCustomer) or 'outbound' (jCustomer -> Salesforce)
  */
 export default function HistoryTab({ direction }) {
-    const { t, i18n } = useTranslation(NS);
+    const { t } = useTranslation(NS);
     const [runs,        setRuns]        = useState([]);
     const [records,     setRecords]     = useState({});
     const [loading,     setLoading]     = useState(true);
@@ -99,11 +109,6 @@ export default function HistoryTab({ direction }) {
         } finally { setBusy(null); }
     };
 
-    const formatDate = iso => {
-        if (!iso) return '';
-        const d = new Date(iso);
-        return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(i18n.language);
-    };
 
     const data = runs.map(run => {
         const loaded = records[run.id];
@@ -118,20 +123,24 @@ export default function HistoryTab({ direction }) {
 
     const columns = [
         {
-            key: 'when', label: t(`${NS}:history.col.when`),
+            key: 'when', width: WIDTHS.when, label: t(`${NS}:history.col.when`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return <RecordsLoader runId={row.runId} onLoad={loadRecords} />;
-                if (row.kind === 'run') return <Typography variant="body">{formatDate(v.startedAt)}</Typography>;
+                if (row.kind === 'run') return (
+                    <Tooltip label={absoluteTime(v.startedAt)}>
+                        <span><Typography variant="body">{relativeTime(v.startedAt)}</Typography></span>
+                    </Tooltip>
+                );
                 return (
-                    <div>
-                        <Typography variant="body">{v.who || t(`${NS}:history.unknownWho`)}</Typography>
-                        {v.profileId && <Typography variant="caption">{v.profileId}</Typography>}
+                    <div className={classes.cellText}>
+                        <Typography variant="body" className={classes.wrapAny}>{v.who || t(`${NS}:history.unknownWho`)}</Typography>
+                        {v.profileId && <Typography variant="caption" className={classes.wrapAny}>{v.profileId}</Typography>}
                     </div>
                 );
             })
         },
         {
-            key: 'what', label: t(`${NS}:history.col.what`),
+            key: 'what', width: WIDTHS.what, label: t(`${NS}:history.col.what`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'run') return <Typography variant="body">{t(`${NS}:history.trigger.${v.trigger}`)}</Typography>;
@@ -139,11 +148,11 @@ export default function HistoryTab({ direction }) {
             })
         },
         {
-            key: 'result', label: t(`${NS}:history.col.result`),
+            key: 'result', width: WIDTHS.result, label: t(`${NS}:history.col.result`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'record') {
-                    return <Typography variant="body">{[v.sfObject, v.sfId].filter(Boolean).join(' ')}</Typography>;
+                    return <Typography variant="body" className={classes.wrapAny}>{[v.sfObject, v.sfId].filter(Boolean).join(' ')}</Typography>;
                 }
                 const chips = COUNTS.filter(([k]) => v[k] > 0)
                     .map(([k, color]) => <Chip key={k} color={color} label={t(`${NS}:history.count.${k}`, { count: v[k] })} />);
@@ -152,7 +161,7 @@ export default function HistoryTab({ direction }) {
             })
         },
         {
-            key: 'detail', label: t(`${NS}:history.col.details`),
+            key: 'detail', width: WIDTHS.detail, label: t(`${NS}:history.col.details`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'run') {
@@ -164,9 +173,9 @@ export default function HistoryTab({ direction }) {
                     );
                 }
                 return (
-                    <div className={classes.wrapText}>
-                        {(v.fields || []).map((f, i) => <Typography key={i} variant="caption" className={classes.wrapText}>{f}</Typography>)}
-                        {v.message && <Typography variant="caption" className={classes.wrapText}>{v.message}</Typography>}
+                    <div className={classes.cellText}>
+                        {(v.fields || []).map((f, i) => <FieldLine key={i} field={f} />)}
+                        {v.message && <Typography variant="caption" className={classes.wrapAny}>{v.message}</Typography>}
                     </div>
                 );
             })
@@ -176,42 +185,38 @@ export default function HistoryTab({ direction }) {
     if (loading) return <div className={classes.center}><Loader size="big" /></div>;
 
     return (
-        <div className={`${classes.wrapper} ${classes.fitWidth}`}>
-            <div className={classes.header}>
-                <div>
-                    <Typography variant="heading" weight="bold">{t(`${NS}:history.title.${direction}`)}</Typography>
-                    <Typography variant="body" className={classes.subtitle}>{t(`${NS}:history.subtitle`)}</Typography>
-                </div>
-                <div className={classes.headerActions}>
-                    <Button variant="ghost" icon={<Reload />} label={t(`${NS}:history.refresh`)}
-                        onClick={load} isDisabled={busy !== null} />
-                    <Button variant="outlined" icon={<Download />} label={t(`${NS}:history.exportCsv`)}
-                        onClick={() => handleExport('csv')} isLoading={busy === 'csv'} isDisabled={busy !== null || runs.length === 0} />
-                    <Button variant="outlined" icon={<Download />} label={t(`${NS}:history.exportJson`)}
-                        onClick={() => handleExport('json')} isLoading={busy === 'json'} isDisabled={busy !== null || runs.length === 0} />
-                    {!confirming && (
+        <div className={`${layout.page} ${classes.fitWidth}`}>
+            <Section
+                title={t(`${NS}:history.title.${direction}`)}
+                description={t(`${NS}:history.subtitle`)}
+                actions={(
+                    <>
+                        <Button variant="ghost" icon={<Reload />} label={t(`${NS}:history.refresh`)}
+                            onClick={load} isDisabled={busy !== null} />
+                        <Button variant="ghost" icon={<Download />} label={t(`${NS}:history.exportCsv`)}
+                            onClick={() => handleExport('csv')} isLoading={busy === 'csv'} isDisabled={busy !== null || runs.length === 0} />
+                        <Button variant="ghost" icon={<Download />} label={t(`${NS}:history.exportJson`)}
+                            onClick={() => handleExport('json')} isLoading={busy === 'json'} isDisabled={busy !== null || runs.length === 0} />
                         <Button variant="outlined" color="danger" icon={<Delete />} label={t(`${NS}:history.purge`)}
-                            onClick={() => setConfirming(true)} isDisabled={busy !== null || runs.length === 0} />
-                    )}
-                </div>
-            </div>
-
+                            onClick={() => setConfirming(true)} isDisabled={confirming || busy !== null || runs.length === 0} />
+                    </>
+                )}
+            >
             {confirming && (
-                <div className={classes.headerActions}>
-                    <Typography variant="body">{t(`${NS}:history.purgeConfirm.${direction}`)}</Typography>
-                    <Button variant="default" color="danger" icon={<Delete />} label={t(`${NS}:history.purgeYes`)}
-                        onClick={handlePurge} isLoading={busy === 'purge'} isDisabled={busy !== null} />
-                    <Button variant="ghost" label={t(`${NS}:history.purgeNo`)}
-                        onClick={() => setConfirming(false)} isDisabled={busy !== null} />
-                </div>
+                <Banner variant="danger" title={t(`${NS}:history.purgeConfirm.${direction}`)}>
+                    <div className={layout.actions}>
+                        <Button variant="default" color="danger" icon={<Delete />} label={t(`${NS}:history.purgeYes`)}
+                            onClick={handlePurge} isLoading={busy === 'purge'} isDisabled={busy !== null} />
+                        <Button variant="ghost" label={t(`${NS}:history.purgeNo`)}
+                            onClick={() => setConfirming(false)} isDisabled={busy !== null} />
+                    </div>
+                </Banner>
             )}
 
-            {msg && <Typography variant="body">{msg}</Typography>}
-
-            <Separator />
+            {msg && <Banner variant="info" title={msg}><span /></Banner>}
 
             {runs.length === 0
-                ? <Typography variant="body" className={classes.subtitle}>{t(`${NS}:history.empty`)}</Typography>
+                ? <EmptyData title={t(`${NS}:history.emptyTitle`)} message={t(`${NS}:history.empty`)} />
                 : (
                     <div className={classes.tableScroll}>
                         <DataTable
@@ -227,6 +232,7 @@ export default function HistoryTab({ direction }) {
                         />
                     </div>
                 )}
+            </Section>
         </div>
     );
 }

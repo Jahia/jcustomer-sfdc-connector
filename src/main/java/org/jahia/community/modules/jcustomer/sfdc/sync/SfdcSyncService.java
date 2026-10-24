@@ -405,7 +405,8 @@ public class SfdcSyncService {
     private boolean apply(Map<String, Object> profile, Map<String, Object> properties, String siteKey, Run run,
                           String email, String sfObject, String sfId) throws Exception {
         String profileId = (String) profile.get("itemId");
-        Map<String, Object> changed = JCustomerProfileService.changedProperties(profile, properties);
+        Map<String, Object> shaped = profileService.shapeForPropertyTypes(properties, siteKey);
+        Map<String, Object> changed = JCustomerProfileService.changedProperties(profile, shaped);
         if (changed.isEmpty() || !profileService.updateProfile(profileId, changed, siteKey)) {
             logger.debug("[SFDC-Sync] Profile {} ({}) already up to date with {} {}", profileId, email, sfObject, sfId);
             rec(run, Outcome.SKIPPED, email, profileId, sfObject, sfId, null, "already up to date");
@@ -434,33 +435,13 @@ public class SfdcSyncService {
     }
 
     /**
-     * Converts a Salesforce field value to the appropriate jCustomer value.
-     *
-     * SF multi-select picklists are returned as semicolon-separated strings
-     * (e.g. "Syntec;Métallurgie"). jCustomer multi-valued properties expect
-     * a List<String>. We split on ";" whenever the value contains one.
-     *
-     * Single-value fields are kept as plain strings.
+     * Normalises a Salesforce field value: a list is kept, anything else becomes trimmed text. Whether
+     * it becomes a list in jCustomer depends on the property type, decided in
+     * {@link JCustomerProfileService#shapeForPropertyTypes}.
      */
     private static Object toJcValue(Object sfValue) {
         if (sfValue == null) return null;
-
-        // If SF already sent a list (rare but possible in bulk API), pass it through
         if (sfValue instanceof List) return sfValue;
-
-        String str = sfValue.toString().trim();
-        if (str.isBlank()) return str;
-
-        // SF multi-select picklist separator is ";"
-        if (str.contains(";")) {
-            List<String> values = new ArrayList<>();
-            for (String part : str.split(";")) {
-                String trimmed = part.trim();
-                if (!trimmed.isEmpty()) values.add(trimmed);
-            }
-            return values;
-        }
-
-        return str;
+        return sfValue.toString().trim();
     }
 }

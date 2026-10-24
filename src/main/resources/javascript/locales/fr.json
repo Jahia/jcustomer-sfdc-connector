@@ -16,12 +16,18 @@
         "triggers": "Déclencheurs",
         "inbound": "SFDC → jCustomer",
         "outbound": "jCustomer → SFDC",
+        "history": "Historique",
+        "overview": "Vue d'ensemble"
+      },
+      "sub": {
+        "mapping": "Correspondances",
+        "triggers": "Déclencheurs",
         "history": "Historique"
       }
     },
     "connection": {
       "title": "Connexion Salesforce",
-      "subtitle": "Renseignez les identifiants de votre Connected App Salesforce. La clé privée doit être un PEM PKCS#8 non chiffré (-----BEGIN PRIVATE KEY-----) ; convertissez une clé PKCS#1 (-----BEGIN RSA PRIVATE KEY-----) avec : openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem. Téléversez le certificat public correspondant dans la Connected App.",
+      "subtitle": "Partagée par les deux sens de synchronisation. Le connecteur se connecte à Salesforce avec le flux JWT Bearer d'une Connected App.",
       "enabled": "Connecteur activé",
       "test": "Tester la connexion",
       "testing": "Test en cours...",
@@ -31,38 +37,63 @@
       "field": {
         "instanceUrl": {
           "label": "URL de l'instance",
-          "placeholder": "https://votreorg.my.salesforce.com"
+          "placeholder": "https://votreorg.my.salesforce.com",
+          "helper": "Votre URL My Domain, en https uniquement."
         },
         "clientId": {
           "label": "Client ID (Consumer Key)",
-          "placeholder": "Consumer key de la Connected App"
+          "placeholder": "Consumer key de la Connected App",
+          "helper": "Consumer key de la Connected App."
         },
         "sfUsername": {
           "label": "Utilisateur API Salesforce",
-          "placeholder": "utilisateur.integration@votreorg.com"
+          "placeholder": "utilisateur.integration@votreorg.com",
+          "helper": "Utilisateur d'intégration, pré-autorisé sur la Connected App."
         },
         "apiVersion": {
           "label": "Version d'API",
           "placeholder": "ex. v66.0",
-          "hint": "Laissez vide pour utiliser {{version}} (sfdc.api.version dans la configuration OSGi)."
+          "hint": "Laissez vide pour utiliser {{version}} (sfdc.api.version dans la configuration OSGi).",
+          "helper": "Version de l'API REST Salesforce."
         },
         "privateKey": {
           "label": "Clé privée (PEM, PKCS#8)",
           "placeholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
           "placeholderStored": "Une clé est déjà stockée - collez un nouveau PEM pour la remplacer",
-          "stored": "Clé privée stockée - laissez vide pour la conserver"
+          "stored": "Clé privée stockée - laissez vide pour la conserver",
+          "helper": "PEM PKCS#8 non chiffré (BEGIN PRIVATE KEY)."
+        }
+      },
+      "enabledHelp": "Désactivé, rien n'est synchronisé dans aucun sens ; les réglages sont conservés.",
+      "org": {
+        "title": "Org Salesforce",
+        "description": "Où se trouvent les données."
+      },
+      "app": {
+        "title": "Connected App",
+        "description": "L'application et l'utilisateur d'intégration utilisés par le connecteur."
+      },
+      "key": {
+        "title": "Clé privée",
+        "description": "Signe les demandes de connexion. Elle est stockée sur le serveur et n'est plus jamais affichée.",
+        "stored": "Clé enregistrée",
+        "missing": "Pas encore de clé",
+        "howTo": {
+          "title": "Comment créer la clé et le certificat",
+          "step1": "1. Générez une clé PKCS#8 non chiffrée : openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out key.pem",
+          "step2": "2. Créez son certificat et téléversez-le dans la Connected App (Use digital signatures) : openssl req -new -x509 -key key.pem -out cert.crt -days 3650",
+          "step3": "3. Collez ici le contenu de key.pem. Une clé PKCS#1 (BEGIN RSA PRIVATE KEY) doit d'abord être convertie : openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem"
         }
       }
     },
     "mapping": {
-      "title": "Mapping des champs",
-      "subtitle": "Mappez les champs Contact, Account et Lead Salesforce vers les propriétés de profil jCustomer. L'email (→ email) est requis pour la correspondance des profils.",
       "col": {
         "sfField": "Champ Salesforce",
-        "jcProperty": "Propriété jCustomer"
+        "jcProperty": "Propriété jCustomer",
+        "sfFieldOf": "Champ Salesforce ({{object}})"
       },
-      "selectField": "— Sélectionner un champ SF —",
-      "selectProperty": "— Sélectionner une propriété jC —",
+      "selectField": "Sélectionner un champ Salesforce",
+      "selectProperty": "Sélectionner une propriété jCustomer",
       "addRow": "Ajouter un mapping",
       "empty": "Aucun mapping configuré. Cliquez sur \"Ajouter un mapping\" pour commencer.",
       "saved": "Mapping sauvegardé pour {{obj}}",
@@ -73,6 +104,26 @@
         "jsonTip": "Télécharger le mapping des champs {{obj}} au format JSON",
         "done": "{{count}} ligne(s) de mapping {{obj}} exportée(s) au format {{fmt}}",
         "empty": "Aucun mapping {{obj}} complet à exporter"
+      },
+      "title": {
+        "inbound": "Ce que Salesforce écrit dans jCustomer",
+        "outbound": "Ce que jCustomer écrit dans Salesforce"
+      },
+      "subtitle": {
+        "inbound": "Pour chaque objet Salesforce, choisissez le champ et la propriété jCustomer qu'il alimente. Les profils sont rapprochés par email.",
+        "outbound": "Pour chaque propriété jCustomer, choisissez le champ Salesforce qu'elle alimente. Les enregistrements sont rapprochés par identifiant stocké, puis par email."
+      },
+      "loadError": "Certaines données n'ont pas pu être chargées",
+      "savedFor": "Correspondances {{object}} enregistrées",
+      "required": {
+        "title": "Les enregistrements {{object}} ne peuvent pas encore être créés"
+      },
+      "duplicates": "Cibles utilisées plusieurs fois : {{fields}}",
+      "duplicatesHelp": "Chaque cible reçoit une seule valeur : gardez une ligne par cible.",
+      "emptyTitle": "Aucun champ {{object}} défini",
+      "emptyMessage": {
+        "inbound": "Ajoutez une ligne pour copier un champ Salesforce dans une propriété jCustomer.",
+        "outbound": "Ajoutez une ligne pour envoyer une propriété jCustomer vers un champ Salesforce."
       }
     },
     "sync": {
@@ -90,7 +141,7 @@
           "label": "Batch planifié",
           "desc": "Synchronise tous les contacts sur un planning cron. Utilise le delta sync (filtre LastModifiedDate).",
           "cron": "Expression cron",
-          "cronHint": "Format : seconde minute heure jour mois semaine — ex. 0 0 5 * * ? = quotidien à 05h00 UTC"
+          "cronHint": "Format : seconde minute heure jour mois semaine - ex. 0 0 5 * * ? = quotidien à 05h00 UTC"
         },
         "manual": {
           "label": "Synchronisation manuelle",
@@ -106,20 +157,23 @@
       "trigger": "Synchroniser maintenant",
       "running": "En cours...",
       "started": "Synchronisation lancée en arrière-plan. Actualisez dans quelques secondes pour voir le résultat.",
-      "info": "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi."
+      "info": "La synchronisation planifiée s'exécute quotidiennement à 05h00 UTC. Une synchronisation sur connexion se déclenche automatiquement à la connexion d'un utilisateur. Configurez le planning dans le fichier de configuration OSGi.",
+      "now": {
+        "title": "Exécuter maintenant"
+      }
     },
     "outbound": {
       "mapping": {
         "title": "Mapping des champs sortants",
         "subtitle": "Mappez les propriétés de profil jCustomer vers les champs Lead et Contact Salesforce. Les enregistrements correspondants sont mis à jour ; les profils sans correspondance en créent un nouveau.",
         "saved": "Mapping {{obj}} sortant enregistré",
-        "requiredHint": "Salesforce exige {{fields}} pour créer un {{obj}} — mappez-les, sinon seuls les {{obj}} existants seront mis à jour."
+        "requiredHint": "Salesforce exige {{fields}} pour créer un {{obj}} - mappez-les, sinon seuls les {{obj}} existants seront mis à jour."
       },
       "triggers": {
         "title": "Synchronisation vers Salesforce",
         "subtitle": "Le connecteur interroge jCustomer pour détecter les profils modifiés et les envoie vers Salesforce en tant que Leads.",
         "saved": "Configuration de synchronisation sortante enregistrée",
-        "pollStarted": "Synchronisation lancée en arrière-plan — consultez le dernier envoi sortant pour le résultat.",
+        "pollStarted": "Synchronisation lancée en arrière-plan - consultez le dernier envoi sortant pour le résultat.",
         "pollNow": "Synchroniser maintenant",
         "pollRunning": "Synchronisation...",
         "what": {
@@ -128,7 +182,7 @@
         },
         "target": {
           "label": "Objet Salesforce cible",
-          "desc": "N'envoie les profils que vers cet objet. Configurez son mapping dans l'onglet Mapping des champs.",
+          "desc": "N'envoie les profils que vers cet objet. Configurez ses champs dans l'onglet Correspondances.",
           "lead": "Lead",
           "contact": "Contact"
         },
@@ -145,7 +199,26 @@
           "subtitle": "Fréquence d'interrogation de jCustomer tant qu'un déclencheur ci-dessus est actif.",
           "active": "Les modifications sont envoyées automatiquement selon cette planification, à partir du moment où un déclencheur a été activé.",
           "inactive": "Aucun déclencheur actif : rien n'est envoyé automatiquement. Activez Mises à jour de profil ou Soumissions de formulaire ci-dessus.",
-          "cron": "Expression cron"
+          "activeTitle": "L'envoi automatique est actif",
+          "inactiveTitle": "L'envoi automatique est arrêté",
+          "cron": "Expression cron",
+          "usingDefault": "Planification par défaut (outbound.poll.cron). Modifiez-la ici pour la remplacer."
+        },
+        "auto": {
+          "title": "Envoi automatique",
+          "description": "Activez un déclencheur et les profils modifiés sont envoyés selon la planification ci-dessous."
+        },
+        "now": {
+          "title": "Exécuter maintenant",
+          "description": "Envoyer tout de suite, sans changer la configuration.",
+          "poll": {
+            "label": "Envoyer les dernières modifications",
+            "desc": "Lance immédiatement le même envoi que la planification."
+          },
+          "push": {
+            "label": "Envoyer un profil",
+            "desc": "Envoie un profil jCustomer, trouvé par email, vers un {{object}} Salesforce."
+          }
         }
       },
       "sync": {
@@ -155,14 +228,17 @@
         "emailRequired": "Saisissez un email de profil à envoyer.",
         "push": "Envoyer",
         "pushing": "Envoi...",
-        "result": "Envoi {{status}} pour {{email}}",
         "lastRun": "Dernier envoi sortant",
         "at": "Quand",
         "status": "Statut",
         "created": "Leads créés",
         "updated": "Leads mis à jour",
         "errors": "Erreurs",
-        "emailPlaceholder": "Adresse email du profil"
+        "emailPlaceholder": "Adresse email du profil",
+        "result": {
+          "pushed": "{{email}} envoyé vers Salesforce",
+          "skipped": "{{email}} n'a pas été envoyé : voir l'historique pour la raison"
+        }
       }
     },
     "cron": {
@@ -186,6 +262,13 @@
         "friday": "Vendredi",
         "saturday": "Samedi",
         "sunday": "Dimanche"
+      },
+      "describe": {
+        "hourly": "Toutes les heures à :{{minute}}",
+        "daily": "Tous les jours à {{time}}",
+        "weekly": "Chaque {{day}} à {{time}}",
+        "monthly": "Le {{day}} de chaque mois à {{time}}",
+        "minutes": "Toutes les {{count}} min"
       }
     },
     "action": {
@@ -244,7 +327,86 @@
       "pagination": {
         "perPage": "Exécutions par page",
         "of": "sur"
-      }
+      },
+      "emptyTitle": "Rien d'enregistré pour le moment"
+    },
+    "common": {
+      "unsaved": "Modifications non enregistrées"
+    },
+    "overview": {
+      "lastActivity": "Dernière activité",
+      "noActivity": "Aucune synchronisation enregistrée",
+      "started": {
+        "inbound": "Synchronisation Salesforce → jCustomer lancée en arrière-plan. Résultats dans l'historique.",
+        "outbound": "Envoi jCustomer → Salesforce lancé en arrière-plan. Résultats dans l'historique."
+      },
+      "trigger": {
+        "login": "À la connexion",
+        "profileUpdate": "Mises à jour de profil",
+        "formSubmission": "Soumissions de formulaire"
+      },
+      "status": {
+        "off": "Désactivé",
+        "paused": "En pause",
+        "active": "Actif"
+      },
+      "inbound": {
+        "title": "Salesforce → jCustomer",
+        "description": "Les données Contact, Account et Lead de Salesforce enrichissent les profils jCustomer."
+      },
+      "outbound": {
+        "title": "jCustomer → Salesforce",
+        "description": "Les profils jCustomer créent ou mettent à jour un enregistrement Salesforce."
+      },
+      "triggers": "Déclencheurs",
+      "noTrigger": "Aucun : rien ne s'exécute automatiquement",
+      "mapping": "Correspondances",
+      "target": "Cible : {{object}}",
+      "syncNow": "Synchroniser maintenant",
+      "openTriggers": "Déclencheurs",
+      "openHistory": "Historique",
+      "fix": "Corriger",
+      "connection": {
+        "title": "Connexion Salesforce",
+        "none": "Pas encore configurée",
+        "ok": "Connecté",
+        "failed": "Échec de connexion",
+        "disabled": "Connecteur désactivé",
+        "edit": "Modifier la connexion",
+        "keyStored": "Clé enregistrée",
+        "keyMissing": "Pas de clé"
+      },
+      "attention": {
+        "notConfigured": {
+          "title": "La connexion Salesforce n'est pas configurée",
+          "text": "Renseignez la Connected App et la clé privée pour commencer à synchroniser."
+        },
+        "disabled": {
+          "title": "Le connecteur est désactivé",
+          "text": "Rien n'est synchronisé, dans aucun sens, tant qu'il n'est pas activé."
+        },
+        "testFailed": {
+          "title": "Salesforce est injoignable avec ces paramètres",
+          "text": "Vérifiez les paramètres de connexion."
+        },
+        "inboundNoMapping": {
+          "title": "Salesforce → jCustomer s'exécute sans aucun champ",
+          "text": "Définissez des correspondances Contact ou Lead, ou désactivez ses déclencheurs."
+        },
+        "outboundNoMapping": {
+          "title": "jCustomer → Salesforce s'exécute sans champ {{object}}",
+          "text": "Définissez les champs {{object}} à envoyer, ou désactivez ses déclencheurs."
+        },
+        "inboundErrors": {
+          "title": "La dernière exécution Salesforce → jCustomer a eu {{count}} erreur(s)",
+          "text": "Ouvrez l'historique pour voir qui a échoué et pourquoi."
+        },
+        "outboundErrors": {
+          "title": "La dernière exécution jCustomer → Salesforce a eu {{count}} erreur(s)",
+          "text": "Ouvrez l'historique pour voir qui a échoué et pourquoi."
+        }
+      },
+      "fields": "{{object}} : {{count}} champ(s)"
     }
   }
 }
