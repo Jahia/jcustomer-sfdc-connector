@@ -1,5 +1,5 @@
 /**
- * API helpers — POST to Jahia Actions hosted on systemsite.
+ * API helpers - POST to Jahia Actions hosted on systemsite.
  * All connector actions use /sites/systemsite as the host JCR node.
  */
 
@@ -23,23 +23,36 @@ const siteQuery = () => {
     return siteKey ? `?siteKey=${encodeURIComponent(siteKey)}` : '';
 };
 
-const post = async (actionName, body = null, query = '') => {
-    const opts = {
-        method: 'POST',
-        credentials: 'include',
-        cache: 'no-store',   // never serve a cached response — critical for live data reload
-        headers: {
-            'Content-Type': body ? 'application/json' : 'application/x-www-form-urlencoded',
-            'Cache-Control': 'no-cache, no-store',
-            'Pragma': 'no-cache'
+/**
+ * POSTs to a connector action with XMLHttpRequest, not fetch: the actions that change something
+ * (save, sync, push, purge) are under Jahia's CSRF guard, and the guard's script, loaded in every
+ * back-office page, adds the session's token to XMLHttpRequest calls to *.do (never to fetch).
+ * A refused call is redirected to the error page: reported as an error, never parsed as data.
+ */
+const post = (actionName, body = null, query = '') => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', getActionUrl(actionName, query));
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', body ? 'application/json' : 'application/x-www-form-urlencoded');
+    // never serve a cached response - live data on every reload
+    xhr.setRequestHeader('Cache-Control', 'no-cache, no-store');
+    xhr.setRequestHeader('Pragma', 'no-cache');
+    xhr.onload = () => {
+        if (xhr.status < 200 || xhr.status >= 300) {
+            reject(new Error(`HTTP ${xhr.status}`));
+        } else if (/\/error\.html/.test(xhr.responseURL || '')) {
+            reject(new Error('Refused by the CSRF guard: reload the page and try again.'));
+        } else {
+            try {
+                resolve(JSON.parse(xhr.responseText));
+            } catch {
+                reject(new Error(`Unexpected answer from ${actionName}`));
+            }
         }
     };
-    if (body) opts.body = JSON.stringify(body);
-
-    const resp = await fetch(getActionUrl(actionName, query), opts);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return resp.json();
-};
+    xhr.onerror = () => reject(new Error(`Network error calling ${actionName}`));
+    xhr.send(body ? JSON.stringify(body) : null);
+});
 
 export const getConnection        = ()             => post('getConnection');
 export const getSfdcFields       = ()             => post('getSfdcFields');

@@ -4,6 +4,12 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2026-10-24
+
+### Security
+- **Actions that change something are back under Jahia's CSRF guard.** The guard whitelist listed every connector action, so a page on another site could make a signed-in administrator's browser save the connection or mappings, change triggers, start syncs or pushes, or purge the history (the `Origin`/`Referer` check of the actions remained the only control). The whitelist now holds only the read-only actions (`get*`, `testConnection`); `save*`, `trigger*` and `purgeSyncHistory` require the guard's token, and a call without it is refused.
+- The admin screen calls the actions with `XMLHttpRequest` instead of `fetch`, so the guard's page script adds the token; a refused call shows an error instead of being read as data.
+
 ## [2.4.1] - 2026-10-23
 
 ### Fixed

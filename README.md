@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.4.0.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.4.2.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.4.0.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.4.2.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -172,6 +172,8 @@ Admin operations are Jahia Actions at `POST /cms/render/default/{lang}/sites/sys
 
 1. **Authorization** — the caller must be a **server administrator** (`root` / global `administrators`) **or** a **site administrator** of the connector's configured site.
 2. **Same-origin (CSRF) defense** — the request `Origin`/`Referer` host must match the Jahia host.
+
+On top of these, the actions that change something (`save*`, `trigger*`, `purgeSyncHistory`) are under Jahia's **CSRF guard**: a call without the session's token is refused (redirected to `/error.html`). The admin screen calls every action with `XMLHttpRequest`, to which the guard's page script adds the token. Only the read-only actions (`get*`, `testConnection`) are in the module's guard whitelist (`META-INF/configurations/org.jahia.modules.jahiacsrfguard-jcustomer-sfdc.cfg`), which the module rewrites on every deploy. A script calling a write action must send the guard's token (`CSRFTOKEN` header, read from `/modules/CsrfServlet`).
 
 Additional hardening:
 - **SSRF allow-list** — the Salesforce `instanceUrl` is validated on save (`https` + `*.salesforce.com` / `*.force.com`) before any outbound call carrying the org's signed JWT.
