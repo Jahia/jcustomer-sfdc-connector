@@ -5,7 +5,6 @@ import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
 import org.jahia.community.modules.jcustomer.sfdc.config.SiteKeyResolver;
 import org.jahia.community.modules.jcustomer.sfdc.sync.SfdcOutboundSyncService;
-import org.jahia.community.modules.jcustomer.sfdc.sync.SfdcOutboundReconcileJob;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.render.RenderContext;
 import org.jahia.services.render.Resource;
@@ -58,7 +57,7 @@ public class TriggerOutboundReconcileAction extends AbstractSfdcAdminAction {
             return ActionResult.OK;
         }
         final int buf = buffer;
-        Thread t = new Thread(() -> outboundService.runReconcile(site, buf, SfdcOutboundReconcileJob.MAX_PROFILES, SyncHistoryService.Trigger.MANUAL));
+        Thread t = new Thread(() -> outboundService.runReconcile(site, buf, SyncHistoryService.Trigger.MANUAL));
         t.setName("sfdc-outbound-reconcile");
         t.setDaemon(true);
         t.start();

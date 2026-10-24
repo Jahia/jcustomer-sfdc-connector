@@ -305,20 +305,25 @@ public class JCustomerProfileService {
     }
 
     /**
-     * Returns profiles whose {@code systemProperties.lastUpdated} is at or after {@code isoCutoff}
-     * and that carry an email — used by the outbound reconcile job to catch profile changes that
-     * did not emit a Unomi event (e.g. console/REST edits). Newest first.
+     * One page of the profiles (with an email) changed after {@code fromIso} and up to {@code toIso},
+     * oldest first. Pages follow each other by keyset: pass the {@code lastUpdated} and {@code itemId}
+     * of the last profile of the previous page as {@code afterTime} / {@code afterId} ({@code null} for
+     * the first page). Sorting on both and continuing strictly after the pair never skips nor repeats a
+     * profile, even when many share the same second (bulk imports), and has no offset limit. Used by the
+     * outbound poll to catch profile changes that emit no Unomi event (console/REST edits).
+     *
+     * @param fromIso   exclusive lower bound of {@code systemProperties.lastUpdated}
+     * @param toIso     inclusive upper bound (the start of the run), so profiles the run itself
+     *                  updates are left for the next run instead of being read again
+     * @param afterTime {@code lastUpdated} of the last profile of the previous page, or {@code null}
+     * @param afterId   {@code itemId} of that profile, or {@code null}
+     * @param limit     page size
      */
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> searchProfilesModifiedSince(String isoCutoff, String siteKey, int limit) throws Exception {
+    public List<Map<String, Object>> searchProfilesChanged(String fromIso, String toIso, String afterTime, String afterId,
+                                                           String siteKey, int limit) throws Exception {
         if (contextServerService == null || !contextServerService.isAvailable(siteKey)) {
             throw new IllegalStateException("[JC-Profile] ContextServerService not available for site " + siteKey);
         }
-        Map<String, Object> dateParams = new HashMap<>();
-        dateParams.put("propertyName", "systemProperties.lastUpdated");
-        dateParams.put("comparisonOperator", "greaterThan");
-        dateParams.put("propertyValueDate", isoCutoff);
-
         Map<String, Object> emailParams = new HashMap<>();
         emailParams.put("propertyName", "properties.email");
         emailParams.put("comparisonOperator", "exists");
@@ -332,55 +337,86 @@ public class JCustomerProfileService {
         Map<String, Object> boolParams = new HashMap<>();
         boolParams.put("operator", "and");
         boolParams.put("subConditions", List.of(
-                condition("profilePropertyCondition", dateParams),
                 condition("profilePropertyCondition", emailParams),
-                condition("profilePropertyCondition", notHealthCheck)));
+                condition("profilePropertyCondition", notHealthCheck),
+                dateBound("profilePropertyCondition", "systemProperties.lastUpdated", "lessThanOrEqualTo", toIso),
+                keyset("profilePropertyCondition", "systemProperties.lastUpdated", fromIso, afterTime, afterId)));
 
-        Map<String, Object> searchRequest = new HashMap<>();
-        searchRequest.put("condition", condition("booleanCondition", boolParams));
-        searchRequest.put("offset", 0);
-        searchRequest.put("limit", limit);
-        searchRequest.put("sortby", "systemProperties.lastUpdated");
-
-        Map<String, Object> result = contextServerService.executePostRequest(
-                siteKey, "/cxs/profiles/search", searchRequest, null, null, Map.class);
-        if (result == null) return List.of();
-        List<Map<String, Object>> list = (List<Map<String, Object>>) result.get("list");
-        return list != null ? list : List.of();
+        return page("/cxs/profiles/search", condition("booleanCondition", boolParams),
+                "systemProperties.lastUpdated:asc,itemId:asc", siteKey, limit);
     }
 
     /**
-     * Returns {@code form} events since {@code isoCutoff} (oldest first). Each event carries a
-     * {@code profileId} — the reconcile loads that profile and pushes it. Pattern from Jahia's
+     * One page of the {@code form} events after {@code fromIso} and up to {@code toIso}, oldest first,
+     * paged by keyset on ({@code timeStamp}, {@code itemId}) as {@link #searchProfilesChanged}. Each event
+     * carries a {@code profileId}: the poll loads that profile and pushes it. Pattern from Jahia's
      * Workato Unomi connector ({@code /cxs/events/search}).
      */
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> searchFormEventsSince(String isoCutoff, String siteKey, int limit) throws Exception {
+    public List<Map<String, Object>> searchFormEvents(String fromIso, String toIso, String afterTime, String afterId,
+                                                      String siteKey, int limit) throws Exception {
         if (contextServerService == null || !contextServerService.isAvailable(siteKey)) {
             throw new IllegalStateException("[JC-Profile] ContextServerService not available for site " + siteKey);
         }
         Map<String, Object> typeParams = new HashMap<>();
         typeParams.put("eventTypeId", "form");
 
-        Map<String, Object> tsParams = new HashMap<>();
-        tsParams.put("propertyName", "timeStamp");
-        tsParams.put("comparisonOperator", "greaterThan");
-        tsParams.put("propertyValueDate", isoCutoff);
-
         Map<String, Object> boolParams = new HashMap<>();
         boolParams.put("operator", "and");
         boolParams.put("subConditions", List.of(
                 condition("eventTypeCondition", typeParams),
-                condition("eventPropertyCondition", tsParams)));
+                dateBound("eventPropertyCondition", "timeStamp", "lessThanOrEqualTo", toIso),
+                keyset("eventPropertyCondition", "timeStamp", fromIso, afterTime, afterId)));
 
+        return page("/cxs/events/search", condition("booleanCondition", boolParams),
+                "timeStamp:asc,itemId:asc", siteKey, limit);
+    }
+
+    /**
+     * Items strictly after a keyset position: {@code date > fromIso} for the first page, then
+     * {@code date > afterTime OR (date == afterTime AND itemId > afterId)}.
+     */
+    private static Map<String, Object> keyset(String conditionType, String dateProperty, String fromIso,
+                                              String afterTime, String afterId) {
+        if (afterTime == null || afterId == null) {
+            return dateBound(conditionType, dateProperty, "greaterThan", fromIso);
+        }
+        Map<String, Object> idParams = new HashMap<>();
+        idParams.put("propertyName", "itemId");
+        idParams.put("comparisonOperator", "greaterThan");
+        idParams.put("propertyValue", afterId);
+
+        Map<String, Object> sameTime = new HashMap<>();
+        sameTime.put("operator", "and");
+        sameTime.put("subConditions", List.of(
+                dateBound(conditionType, dateProperty, "equals", afterTime),
+                condition(conditionType, idParams)));
+
+        Map<String, Object> after = new HashMap<>();
+        after.put("operator", "or");
+        after.put("subConditions", List.of(
+                dateBound(conditionType, dateProperty, "greaterThan", afterTime),
+                condition("booleanCondition", sameTime)));
+        return condition("booleanCondition", after);
+    }
+
+    private static Map<String, Object> dateBound(String conditionType, String dateProperty, String operator, String iso) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("propertyName", dateProperty);
+        params.put("comparisonOperator", operator);
+        params.put("propertyValueDate", iso);
+        return condition(conditionType, params);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> page(String path, Map<String, Object> condition, String sortBy,
+                                           String siteKey, int limit) throws Exception {
         Map<String, Object> searchRequest = new HashMap<>();
-        searchRequest.put("condition", condition("booleanCondition", boolParams));
+        searchRequest.put("condition", condition);
         searchRequest.put("offset", 0);
         searchRequest.put("limit", limit);
-        searchRequest.put("sortby", "timeStamp");
-
+        searchRequest.put("sortby", sortBy);
         Map<String, Object> result = contextServerService.executePostRequest(
-                siteKey, "/cxs/events/search", searchRequest, null, null, Map.class);
+                siteKey, path, searchRequest, null, null, Map.class);
         if (result == null) return List.of();
         List<Map<String, Object>> list = (List<Map<String, Object>>) result.get("list");
         return list != null ? list : List.of();
