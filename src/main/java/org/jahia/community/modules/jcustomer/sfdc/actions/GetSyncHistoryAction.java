@@ -18,7 +18,8 @@ import java.util.Map;
 
 /**
  * Lists the newest recorded runs of one sync direction.
- * POST *.getSyncHistory.do?direction=inbound|outbound[&limit=n][&includeRecords=true] → { runs: [...] }
+ * POST *.getSyncHistory.do?direction=inbound|outbound[&limit=n][&includeRecords=true]
+ * → { runs: [...], retention: { enabled, days, defaultDays } }
  * Without {@code includeRecords} each run carries only its {@code recordCount} (the UI loads records
  * when a run is expanded); with it each run also carries its {@code records} (used for export).
  */
@@ -39,13 +40,14 @@ public class GetSyncHistoryAction extends AbstractSfdcAdminAction {
                 new JSONObject().put("error", "direction must be inbound or outbound").toString(), 400);
             return ActionResult.OK;
         }
-        int limit = Integer.MAX_VALUE;   // the service never keeps more than history.max.runs
+        int limit = Integer.MAX_VALUE;   // bounded by the retention of the direction
         try { limit = Integer.parseInt(first(params, "limit")); } catch (Exception ignored) {}
         boolean includeRecords = "true".equalsIgnoreCase(first(params, "includeRecords"));
         List<Map<String, Object>> list = includeRecords ? history.exportRuns(direction) : history.listRuns(direction, limit);
         JSONArray runs = new JSONArray();
         list.forEach(m -> runs.put(new JSONObject(m)));
-        GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("runs", runs).toString());
+        GetSfdcFieldsAction.write(ctx.getResponse(), new JSONObject().put("runs", runs)
+            .put("retention", new JSONObject(history.getRetention(direction))).toString());
         return ActionResult.OK;
     }
 

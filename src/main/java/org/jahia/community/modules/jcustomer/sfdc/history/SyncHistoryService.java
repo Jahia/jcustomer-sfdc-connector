@@ -1,5 +1,6 @@
 package org.jahia.community.modules.jcustomer.sfdc.history;
 
+import org.jahia.services.content.JCRCallback;
 import org.jahia.services.content.JCRNodeIteratorWrapper;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import javax.jcr.RepositoryException;
 import javax.jcr.Value;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -23,16 +25,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Sync history: what each run of a sync direction did, on whom, and what.
  *
- * <p>Stored as typed JCR nodes under its own root {@value #ROOT}
- * ({@code jcsfdcnt:historyRoot} → {@code inbound|outbound} ({@code jcsfdcnt:syncHistory}) →
- * runs ({@code jcsfdcnt:syncRun}) → records ({@code jcsfdcnt:syncRecord})), so it is browsable in the
- * JCR browser. Retention and caps come from the {@code org.jahia.community.jcustomer.sfdc}
- * configuration ({@code history.max.runs}, {@code history.max.records.per.run},
+ * <p>Stored as typed JCR nodes under its own root {@value #ROOT}, in the {@code default} workspace,
+ * split by day (UTC) so that no node holds too many children:
+ * {@code jcsfdcnt:historyRoot} → {@code inbound|outbound} ({@code jcsfdcnt:syncHistory}) →
+ * {@code yyyy} → {@code MM} → {@code dd} ({@code jcsfdcnt:historyFolder}) → runs
+ * ({@code jcsfdcnt:syncRun}) → records ({@code jcsfdcnt:syncRecord}). A run's id is its node name,
+ * which carries its start time, so the day folder of a run is derived from its id. Runs stored flat
+ * under the direction node by earlier versions are moved into their day folder on activation and by
+ * the purge job.
+ *
+ * <p>Retention: each direction has its own automatic purge (on/off and a number of days, stored on
+ * its {@code jcsfdcnt:syncHistory} node and set from the admin UI); when nothing is stored it is on,
+ * with {@code history.retention.days} days. {@link SyncHistoryPurgeJob} applies it. Caps come from the
+ * {@code org.jahia.community.jcustomer.sfdc} configuration ({@code history.max.records.per.run},
  * {@code history.max.value.length}).
  *
  * <p>A run is recorded in memory by the thread that executes it ({@link Run}) and written once, when it
@@ -50,16 +61,32 @@ public class SyncHistoryService {
 
     /** Root node of the history, beside the connector configuration under {@code /settings}. */
     public static final String ROOT = "/settings/jcustomer-sfdc-connector-history";
+    private static final String WORKSPACE = "default";
 
     private static final String NT_ROOT    = "jcsfdcnt:historyRoot";
     private static final String NT_HISTORY = "jcsfdcnt:syncHistory";
+    private static final String NT_FOLDER  = "jcsfdcnt:historyFolder";
     private static final String NT_RUN     = "jcsfdcnt:syncRun";
     private static final String NT_RECORD  = "jcsfdcnt:syncRecord";
 
-    private static final Pattern RUN_ID = Pattern.compile("^run-[0-9A-Za-z-]+$");
+    private static final String P_PURGE_ENABLED  = "purgeEnabled";
+    private static final String P_RETENTION_DAYS = "retentionDays";
+
+    /** {@code run-yyyyMMdd-HHmmss-SSS-hex}: groups 1-3 are the year, month and day of its folder. */
+    private static final Pattern RUN_ID = Pattern.compile("^run-(\\d{4})(\\d{2})(\\d{2})-\\d{6}-\\d{3}-[0-9a-f]+$");
+    private static final Pattern FOLDER = Pattern.compile("^\\d{2,4}$");
+    /** Year, month, day. */
+    private static final int DAY_DEPTH = 3;
     private static final DateTimeFormatter RUN_NAME =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter DAY_KEY =
+            DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC);
     private static final SecureRandom RANDOM = new SecureRandom();
+
+    /** A day folder holds runs, a run holds records: neither should pass this many children. */
+    private static final int MAX_CHILDREN = 1000;
+    public static final int MIN_RETENTION_DAYS = 1;
+    public static final int MAX_RETENTION_DAYS = 3650;
 
     /** Sync direction; the key is the history child node name. */
     public enum Direction {
@@ -85,21 +112,26 @@ public class SyncHistoryService {
     }
 
     @interface Config {
-        int history_max_runs() default 100;
         int history_max_records_per_run() default 500;
         int history_max_value_length() default 200;
+        int history_retention_days() default 30;
     }
 
-    private volatile int maxRuns = 1;
     private volatile int maxRecords = 1;
     private volatile int maxValueLength = 1;
+    private volatile int defaultRetentionDays = 30;
 
     @Activate
     @Modified
     public void activate(Config config) {
-        this.maxRuns        = Math.max(1, config.history_max_runs());
-        this.maxRecords     = Math.max(1, config.history_max_records_per_run());
+        this.maxRecords     = Math.min(MAX_CHILDREN, Math.max(1, config.history_max_records_per_run()));
         this.maxValueLength = Math.max(16, config.history_max_value_length());
+        this.defaultRetentionDays = clampDays(config.history_retention_days());
+        if (config.history_max_records_per_run() > MAX_CHILDREN) {
+            logger.warn("[SFDC-History] history.max.records.per.run={} lowered to {}: a run node keeps at most {} records",
+                    config.history_max_records_per_run(), MAX_CHILDREN, MAX_CHILDREN);
+        }
+        migrateLegacyRuns();
     }
 
     /** Starts recording a run. Call {@link Run#finish(String)} when it ends. */
@@ -186,12 +218,11 @@ public class SyncHistoryService {
     // ── Write ─────────────────────────────────────────────────────────────────
 
     private synchronized void persist(Run run, String status, Instant finishedAt) {
+        String name = "run-" + RUN_NAME.format(run.startedAt) + "-"
+                + Integer.toHexString(0x1000 + RANDOM.nextInt(0xF000));
         try {
-            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-                JCRNodeWrapper history = ensureHistory(session, run.direction);
-                String name = "run-" + RUN_NAME.format(run.startedAt) + "-"
-                        + Integer.toHexString(0x1000 + RANDOM.nextInt(0xF000));
-                JCRNodeWrapper node = history.addNode(name, NT_RUN);
+            inDefault(session -> {
+                JCRNodeWrapper node = dayFolder(ensureHistory(session, run.direction), name).addNode(name, NT_RUN);
                 node.setProperty("trigger", run.trigger.key());
                 node.setProperty("status", status == null ? "" : status);
                 node.setProperty("startedAt", calendar(run.startedAt));
@@ -213,7 +244,6 @@ public class SyncHistoryService {
                     if (fields != null && !fields.isEmpty()) r.setProperty("fields", fields.toArray(new String[0]));
                 }
                 session.save();
-                prune(session, history);
                 return null;
             });
         } catch (Exception e) {
@@ -234,15 +264,50 @@ public class SyncHistoryService {
                 : root.addNode(direction.key(), NT_HISTORY);
     }
 
-    /** Removes the oldest runs beyond {@code history.max.runs} (run names sort chronologically). */
-    private void prune(JCRSessionWrapper session, JCRNodeWrapper history) throws RepositoryException {
-        List<String> names = runNames(history);
-        if (names.size() <= maxRuns) return;
-        names.sort(Comparator.naturalOrder());
-        for (String old : names.subList(0, names.size() - maxRuns)) {
-            history.getNode(old).remove();
+    /** The {@code yyyy/MM/dd} folder of a run, created when missing. */
+    private static JCRNodeWrapper dayFolder(JCRNodeWrapper history, String runName) throws RepositoryException {
+        JCRNodeWrapper folder = history;
+        for (String part : dayPath(runName).split("/")) {
+            folder = folder.hasNode(part) ? (JCRNodeWrapper) folder.getNode(part) : folder.addNode(part, NT_FOLDER);
         }
-        session.save();
+        return folder;
+    }
+
+    /** {@code run-20261024-...} → {@code 2026/10/24}. */
+    private static String dayPath(String runName) {
+        Matcher m = RUN_ID.matcher(runName);
+        if (!m.matches()) throw new IllegalArgumentException("Not a run id: " + runName);
+        return m.group(1) + "/" + m.group(2) + "/" + m.group(3);
+    }
+
+    /**
+     * Moves runs stored flat under a direction node (before 2.6.0) into their day folder. Safe to call
+     * any time: does nothing once they are moved.
+     */
+    void migrateLegacyRuns() {
+        try {
+            inDefault(session -> {
+                if (!session.nodeExists(ROOT)) return null;
+                for (Direction d : Direction.values()) {
+                    String path = ROOT + "/" + d.key();
+                    if (!session.nodeExists(path)) continue;
+                    JCRNodeWrapper history = (JCRNodeWrapper) session.getNode(path);
+                    List<String> legacy = names(history, RUN_ID);
+                    if (legacy.isEmpty()) continue;
+                    Map<String, String> targets = new LinkedHashMap<>();
+                    for (String name : legacy) targets.put(name, dayFolder(history, name).getPath());
+                    session.save();                                 // the day folders exist before the moves
+                    for (Map.Entry<String, String> t : targets.entrySet()) {
+                        session.move(history.getPath() + "/" + t.getKey(), t.getValue() + "/" + t.getKey());
+                    }
+                    session.save();
+                    logger.info("[SFDC-History] Moved {} {} run(s) into day folders", legacy.size(), d.key());
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            logger.warn("[SFDC-History] Could not move earlier runs into day folders: {}", e.getMessage());
+        }
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────
@@ -255,17 +320,15 @@ public class SyncHistoryService {
      */
     public List<Map<String, Object>> listRuns(Direction direction, int limit) {
         try {
-            return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+            return inDefault(session -> {
                 List<Map<String, Object>> out = new ArrayList<>();
                 String path = ROOT + "/" + direction.key();
                 if (!session.nodeExists(path)) return out;
-                JCRNodeWrapper history = (JCRNodeWrapper) session.getNode(path);
-                List<String> names = runNames(history);
-                names.sort(Comparator.reverseOrder());
-                for (String name : names.subList(0, Math.min(Math.max(limit, 1), names.size()))) {
-                    JCRNodeWrapper run = (JCRNodeWrapper) history.getNode(name);
+                List<JCRNodeWrapper> runs = new ArrayList<>();
+                newestRuns((JCRNodeWrapper) session.getNode(path), 0, Math.max(limit, 1), runs);
+                for (JCRNodeWrapper run : runs) {
                     Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", name);
+                    m.put("id", run.getName());
                     m.put("trigger", str(run, "trigger"));
                     m.put("status", str(run, "status"));
                     m.put("startedAt", iso(run, "startedAt"));
@@ -286,6 +349,26 @@ public class SyncHistoryService {
         }
     }
 
+    /** Adds the newest runs under {@code folder} (at {@code depth}: 0 = direction node) until {@code limit}. */
+    private static void newestRuns(JCRNodeWrapper folder, int depth, int limit, List<JCRNodeWrapper> out)
+            throws RepositoryException {
+        if (depth == DAY_DEPTH) {
+            List<String> runs = names(folder, RUN_ID);
+            runs.sort(Comparator.reverseOrder());
+            for (String name : runs) {
+                if (out.size() >= limit) return;
+                out.add((JCRNodeWrapper) folder.getNode(name));
+            }
+            return;
+        }
+        List<String> children = names(folder, FOLDER);
+        children.sort(Comparator.reverseOrder());
+        for (String name : children) {
+            if (out.size() >= limit) return;
+            newestRuns((JCRNodeWrapper) folder.getNode(name), depth + 1, limit, out);
+        }
+    }
+
     /**
      * Records of one run, in the order they were processed.
      *
@@ -295,9 +378,9 @@ public class SyncHistoryService {
     public List<Map<String, Object>> getRecords(Direction direction, String runId) {
         if (runId == null || !RUN_ID.matcher(runId).matches()) return List.of();
         try {
-            return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+            return inDefault(session -> {
                 List<Map<String, Object>> out = new ArrayList<>();
-                String path = ROOT + "/" + direction.key() + "/" + runId;
+                String path = ROOT + "/" + direction.key() + "/" + dayPath(runId) + "/" + runId;
                 if (!session.nodeExists(path)) return out;
                 List<JCRNodeWrapper> recs = new ArrayList<>();
                 JCRNodeIteratorWrapper it = ((JCRNodeWrapper) session.getNode(path)).getNodes();
@@ -335,6 +418,143 @@ public class SyncHistoryService {
         return runs;
     }
 
+    // ── Retention ─────────────────────────────────────────────────────────────
+
+    /**
+     * Automatic purge of a direction.
+     *
+     * @return {@code enabled}, {@code days}, {@code defaultDays} ({@code history.retention.days}), and the
+     *         accepted range {@code minDays} / {@code maxDays}
+     */
+    public Map<String, Object> getRetention(Direction direction) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        boolean enabled = true;
+        int days = defaultRetentionDays;
+        try {
+            Object[] stored = inDefault(session -> {
+                String path = ROOT + "/" + direction.key();
+                if (!session.nodeExists(path)) return new Object[]{null, null};
+                JCRNodeWrapper h = (JCRNodeWrapper) session.getNode(path);
+                return new Object[]{
+                    h.hasProperty(P_PURGE_ENABLED) ? h.getProperty(P_PURGE_ENABLED).getBoolean() : null,
+                    h.hasProperty(P_RETENTION_DAYS) ? h.getProperty(P_RETENTION_DAYS).getLong() : null
+                };
+            });
+            if (stored[0] != null) enabled = (Boolean) stored[0];
+            if (stored[1] != null) days = clampDays((int) Math.min(Integer.MAX_VALUE, (Long) stored[1]));
+        } catch (Exception e) {
+            logger.warn("[SFDC-History] Could not read the {} retention: {}", direction.key(), e.getMessage());
+        }
+        out.put("enabled", enabled);
+        out.put("days", days);
+        out.put("defaultDays", defaultRetentionDays);
+        out.put("minDays", MIN_RETENTION_DAYS);
+        out.put("maxDays", MAX_RETENTION_DAYS);
+        return out;
+    }
+
+    /**
+     * Saves the automatic purge of a direction, then applies it at once.
+     *
+     * @param enabled whether runs older than {@code days} are deleted automatically
+     * @param days    retention in days, {@value #MIN_RETENTION_DAYS} to {@value #MAX_RETENTION_DAYS}
+     * @return the number of runs the purge removed (0 when it failed: logged, the purge job retries)
+     * @throws IllegalArgumentException when {@code days} is out of range
+     */
+    public int saveRetention(Direction direction, boolean enabled, int days) throws Exception {
+        if (days < MIN_RETENTION_DAYS || days > MAX_RETENTION_DAYS) {
+            throw new IllegalArgumentException("days must be between " + MIN_RETENTION_DAYS + " and " + MAX_RETENTION_DAYS);
+        }
+        synchronized (this) {
+            inDefault(session -> {
+                JCRNodeWrapper h = ensureHistory(session, direction);
+                h.setProperty(P_PURGE_ENABLED, enabled);
+                h.setProperty(P_RETENTION_DAYS, (long) days);
+                session.save();
+                return null;
+            });
+        }
+        logger.info("[SFDC-History] {} automatic purge {} ({} days)", direction.key(), enabled ? "on" : "off", days);
+        if (!enabled) return 0;
+        try {
+            return purgeOlderThan(direction, days);
+        } catch (Exception e) {                                    // saved; the hourly job will purge
+            logger.warn("[SFDC-History] {} retention saved, immediate purge failed: {}", direction.key(), e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Applies the automatic purge of both directions: deletes the runs older than their retention.
+     * Called by {@link SyncHistoryPurgeJob}.
+     *
+     * @return the number of runs removed
+     */
+    public int purgeExpired() {
+        migrateLegacyRuns();
+        int removed = 0;
+        for (Direction d : Direction.values()) {
+            Map<String, Object> r = getRetention(d);
+            if (!Boolean.TRUE.equals(r.get("enabled"))) continue;
+            try {
+                removed += purgeOlderThan(d, (Integer) r.get("days"));
+            } catch (Exception e) {
+                logger.warn("[SFDC-History] Automatic purge of {} failed: {}", d.key(), e.getMessage());
+            }
+        }
+        return removed;
+    }
+
+    /** Removes the runs of a direction that started more than {@code days} days ago. */
+    private synchronized int purgeOlderThan(Direction direction, int days) throws Exception {
+        Instant limit = Instant.now().minus(Duration.ofDays(days));
+        String cutoff = "run-" + RUN_NAME.format(limit);              // run names sort by start time
+        String cutoffDay = DAY_KEY.format(limit);                     // yyyyMMdd
+        Integer removed = inDefault(session -> {
+            String path = ROOT + "/" + direction.key();
+            if (!session.nodeExists(path)) return 0;
+            return purgeBefore(session, (JCRNodeWrapper) session.getNode(path), 0, "", cutoffDay, cutoff);
+        });
+        int n = removed == null ? 0 : removed;
+        if (n > 0) logger.info("[SFDC-History] Automatic purge removed {} {} run(s) older than {} days", n, direction.key(), days);
+        return n;
+    }
+
+    /**
+     * Removes what is older than {@code cutoff} (a run name prefix) under {@code folder}, whose path below
+     * the direction node is {@code key} ({@code yyyy}, {@code yyyyMM}...). A folder entirely older than
+     * {@code cutoffDay} ({@code yyyyMMdd}) is removed whole, one day at a time; the folder holding the
+     * cutoff is walked; newer ones are kept.
+     */
+    private static int purgeBefore(JCRSessionWrapper session, JCRNodeWrapper folder, int depth, String key,
+                                   String cutoffDay, String cutoff) throws RepositoryException {
+        int removed = 0;
+        if (depth == DAY_DEPTH) {
+            for (String name : names(folder, RUN_ID)) {
+                if (name.compareTo(cutoff) < 0) {
+                    folder.getNode(name).remove();
+                    removed++;
+                }
+            }
+            session.save();
+            return removed;
+        }
+        for (String name : names(folder, FOLDER)) {
+            String childKey = key + name;
+            String cutoffKey = cutoffDay.substring(0, childKey.length());
+            int cmp = childKey.compareTo(cutoffKey);
+            if (cmp > 0) continue;
+            JCRNodeWrapper child = (JCRNodeWrapper) folder.getNode(name);
+            removed += cmp < 0 ? removeAll(session, child, depth + 1)
+                               : purgeBefore(session, child, depth + 1, childKey, cutoffDay, cutoff);
+            if (!child.getNodes().hasNext()) {                      // emptied: remove the folder too
+                child.remove();
+                session.save();
+            }
+        }
+        return removed;
+    }
+
     // ── Purge ─────────────────────────────────────────────────────────────────
 
     /**
@@ -343,27 +563,68 @@ public class SyncHistoryService {
      * @return the number of runs removed
      */
     public synchronized int purge(Direction direction) throws Exception {
-        Integer removed = JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+        Integer removed = inDefault(session -> {
             String path = ROOT + "/" + direction.key();
             if (!session.nodeExists(path)) return 0;
             JCRNodeWrapper history = (JCRNodeWrapper) session.getNode(path);
-            List<String> names = runNames(history);
-            for (String name : names) history.getNode(name).remove();
+            int n = 0;
+            for (String name : names(history, RUN_ID)) {           // runs of an earlier layout
+                history.getNode(name).remove();
+                n++;
+            }
             session.save();
-            return names.size();
+            for (String name : names(history, FOLDER)) {
+                JCRNodeWrapper year = (JCRNodeWrapper) history.getNode(name);
+                n += removeAll(session, year, 1);
+                year.remove();
+                session.save();
+            }
+            return n;
         });
         logger.info("[SFDC-History] Purged {} {} run(s)", removed, direction.key());
         return removed == null ? 0 : removed;
     }
 
+    /**
+     * Empties {@code folder} (at {@code depth}), one day folder per save so that a large history is
+     * never removed in a single transaction.
+     *
+     * @return the number of runs removed
+     */
+    private static int removeAll(JCRSessionWrapper session, JCRNodeWrapper folder, int depth) throws RepositoryException {
+        if (depth == DAY_DEPTH) {
+            int n = names(folder, RUN_ID).size();
+            for (String name : names(folder, Pattern.compile(".*"))) folder.getNode(name).remove();
+            session.save();
+            return n;
+        }
+        int n = 0;
+        for (String name : names(folder, FOLDER)) {
+            JCRNodeWrapper child = (JCRNodeWrapper) folder.getNode(name);
+            n += removeAll(session, child, depth + 1);
+            child.remove();
+            session.save();
+        }
+        return n;
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static List<String> runNames(JCRNodeWrapper history) throws RepositoryException {
+    /** Runs a callback with a system session on the {@code default} workspace, whatever the request's. */
+    private static <T> T inDefault(JCRCallback<T> callback) throws RepositoryException {
+        return JCRTemplate.getInstance().doExecuteWithSystemSessionAsUser(null, WORKSPACE, null, callback);
+    }
+
+    private static int clampDays(int days) {
+        return Math.max(MIN_RETENTION_DAYS, Math.min(MAX_RETENTION_DAYS, days));
+    }
+
+    private static List<String> names(JCRNodeWrapper parent, Pattern pattern) throws RepositoryException {
         List<String> names = new ArrayList<>();
-        JCRNodeIteratorWrapper it = history.getNodes();
+        JCRNodeIteratorWrapper it = parent.getNodes();
         while (it.hasNext()) {
             String n = it.nextNode().getName();
-            if (RUN_ID.matcher(n).matches()) names.add(n);
+            if (pattern.matcher(n).matches()) names.add(n);
         }
         return names;
     }

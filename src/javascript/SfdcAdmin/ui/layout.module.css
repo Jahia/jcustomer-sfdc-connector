@@ -124,6 +124,12 @@
     min-width: 0;
 }
 
+/* A short number (days) between its label and its unit. */
+.inlineNumber {
+    width: 96px;
+    min-width: 0;
+}
+
 .settingExtra {
     padding-left: var(--moon-spacing-medium);
 }

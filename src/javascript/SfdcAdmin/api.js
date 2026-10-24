@@ -39,7 +39,9 @@ const post = (actionName, body = null, query = '') => new Promise((resolve, reje
     xhr.setRequestHeader('Pragma', 'no-cache');
     xhr.onload = () => {
         if (xhr.status < 200 || xhr.status >= 300) {
-            reject(new Error(`HTTP ${xhr.status}`));
+            let detail = '';
+            try { detail = JSON.parse(xhr.responseText)?.error || ''; } catch { /* not JSON */ }
+            reject(new Error(detail ? `${detail} (HTTP ${xhr.status})` : `HTTP ${xhr.status}`));
         } else if (/\/error\.html/.test(xhr.responseURL || '')) {
             reject(new Error('Refused by the CSRF guard: reload the page and try again.'));
         } else {
@@ -82,3 +84,5 @@ export const getSyncHistory    = direction        => post('getSyncHistory', null
 export const getSyncHistoryRun = (direction, run) => post('getSyncHistoryRun', null, directionQuery(direction, { runId: run }));
 export const exportSyncHistory = direction        => post('getSyncHistory', null, directionQuery(direction, { includeRecords: 'true' }));
 export const purgeSyncHistory  = direction        => post('purgeSyncHistory', null, directionQuery(direction));
+export const saveHistoryRetention = (direction, enabled, days) =>
+    post('saveHistoryRetention', null, directionQuery(direction, { enabled: String(enabled), days: String(days) }));

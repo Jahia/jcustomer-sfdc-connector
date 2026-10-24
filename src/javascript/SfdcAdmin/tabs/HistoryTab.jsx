@@ -8,6 +8,7 @@ import { exportHistoryCsv, exportHistoryJson } from '../exportHistory';
 import classes from './HistoryTab.module.css';
 import layout from '../ui/layout.module.css';
 import { Section } from '../ui/Section';
+import HistoryRetention from './HistoryRetention';
 import { cell } from '../ui/table';
 import { absoluteTime, relativeTime } from '../ui/format';
 
@@ -45,7 +46,8 @@ const RecordsLoader = ({ runId, onLoad }) => {
 
 /**
  * Sync history of one direction: one collapsible row per run (when, trigger, result), its records
- * (who, outcome, Salesforce record, fields, message) loaded on expand; export to CSV/JSON; purge.
+ * (who, outcome, Salesforce record, fields, message) loaded on expand; export to CSV/JSON; purge; and
+ * the automatic purge of the direction.
  *
  * @param direction 'inbound' (Salesforce -> jCustomer) or 'outbound' (jCustomer -> Salesforce)
  */
@@ -57,6 +59,7 @@ export default function HistoryTab({ direction }) {
     const [busy,        setBusy]        = useState(null);     // 'csv' | 'json' | 'purge'
     const [confirming,  setConfirming]  = useState(false);
     const [msg,         setMsg]         = useState(null);
+    const [retention,   setRetention]   = useState(null);
     const requested = useRef(new Set());
 
     const load = useCallback(async () => {
@@ -66,6 +69,7 @@ export default function HistoryTab({ direction }) {
         try {
             const data = await getSyncHistory(direction);
             setRuns(Array.isArray(data?.runs) ? data.runs : []);
+            setRetention(data?.retention || null);
         } catch (e) {
             setMsg(e.message);
         } finally { setLoading(false); }
@@ -182,7 +186,8 @@ export default function HistoryTab({ direction }) {
         }
     ];
 
-    if (loading) return <div className={classes.center}><Loader size="big" /></div>;
+    // Full-page wait on the first load only: a reload keeps the screen (and its messages) in place.
+    if (loading && retention === null) return <div className={classes.center}><Loader size="big" /></div>;
 
     return (
         <div className={`${layout.page} ${classes.fitWidth}`}>
@@ -233,6 +238,9 @@ export default function HistoryTab({ direction }) {
                     </div>
                 )}
             </Section>
+
+            <HistoryRetention direction={direction} retention={retention}
+                onSaved={res => { setRetention(res?.retention || retention); if (res?.removed > 0) load(); }} />
         </div>
     );
 }

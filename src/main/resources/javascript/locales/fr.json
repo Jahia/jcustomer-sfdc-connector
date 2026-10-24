@@ -328,7 +328,20 @@
         "perPage": "Exécutions par page",
         "of": "sur"
       },
-      "emptyTitle": "Rien d'enregistré pour le moment"
+      "emptyTitle": "Rien d'enregistré pour le moment",
+      "retention": {
+        "title": "Purge automatique",
+        "description": "L'historique contient des données personnelles (e-mails, valeurs de champs) : ne le conservez que le temps nécessaire.",
+        "label": "Supprimer automatiquement les anciennes exécutions",
+        "help": "Les exécutions plus anciennes que le nombre de jours ci-dessous sont supprimées toutes les heures.",
+        "off": "Désactivée : les exécutions sont conservées jusqu'à ce que vous purgiez l'historique.",
+        "days": "Conserver les exécutions pendant",
+        "unit": "jours",
+        "invalid": "Saisissez un nombre de jours entre {{min}} et {{max}}.",
+        "default": "Par défaut : {{days}} jours.",
+        "saved": "Purge automatique enregistrée.",
+        "savedRemoved": "Purge automatique enregistrée : {{count}} exécution(s) plus ancienne(s) supprimée(s)."
+      }
     },
     "common": {
       "unsaved": "Modifications non enregistrées"

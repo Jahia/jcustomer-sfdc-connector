@@ -328,7 +328,20 @@
         "perPage": "Runs per page",
         "of": "of"
       },
-      "emptyTitle": "Nothing recorded yet"
+      "emptyTitle": "Nothing recorded yet",
+      "retention": {
+        "title": "Automatic purge",
+        "description": "The history holds personal data (emails, field values): keep it only as long as you need it.",
+        "label": "Delete old runs automatically",
+        "help": "Runs older than the number of days below are deleted every hour.",
+        "off": "Off: runs are kept until you purge the history.",
+        "days": "Keep runs for",
+        "unit": "days",
+        "invalid": "Enter a number of days between {{min}} and {{max}}.",
+        "default": "Default: {{days}} days.",
+        "saved": "Automatic purge saved.",
+        "savedRemoved": "Automatic purge saved: {{count}} older run(s) deleted."
+      }
     },
     "common": {
       "unsaved": "Unsaved changes"
