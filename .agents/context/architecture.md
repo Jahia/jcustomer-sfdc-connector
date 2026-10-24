@@ -61,4 +61,4 @@ signature). Calls go through `api.js` (`XMLHttpRequest`).
 ## Tests
 
 JUnit 5 under `src/test/java`, run by every `mvn clean package` and by CI: mapping with default values,
-converted Leads, Salesforce id checks, with fakes subclassing the services. No Cypress suite yet.
+converted Leads, Salesforce id checks, the objects a mapping accepts, with fakes subclassing the services. No Cypress suite yet.
