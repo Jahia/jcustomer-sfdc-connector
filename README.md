@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.4.2.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.5.0.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.4.2.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.5.0.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -217,6 +217,7 @@ migration/                         # one-time Groovy patches (nt:unstructured ->
 - **`saveConnection` rejects the instance URL** - must be `https` and a Salesforce domain.
 - **Inbound: no profiles updated:** a jCustomer profile must exist for the record's email (matched, not created). The login sync logs which case applies: `jCustomer profile updated`, `Salesforce record found but nothing updated`, or `no Salesforce Contact or Lead with this email`.
 - **Inbound: `jCustomer did not update profile ... (event collector returned updated=0)`:** profile updates use Unomi's privileged `updateProperties` event, signed with the jCustomer key of the site's jExperience settings (`X-Unomi-Peer`). jCustomer must allow that key from the Jahia server's address with `updateProperties` among the allowed events (`UNOMI_THIRDPARTY_PROVIDER1_KEY` / `_IPADDRESSES` / `_ALLOWEDEVENTS`). This is the same setup jExperience needs for its own login events; on Jahia Cloud it is provided. A profile that already holds the Salesforce values is not an error: it is recorded as *skipped: already up to date* (2.4.1).
+- **Inbound: a multi-valued jCustomer property stays empty although the history lists it as updated:** before 2.5.0 a single Salesforce value was written as text to a multi-valued property. Values now follow the jCustomer property type (a list for a multi-valued property, a multi-select picklist split on `;`); install 2.5.0 and run **Sync now**, profiles holding a text are rewritten as lists.
 - **`[SFDC-Site] ... set jcustomer.site.key`:** no site could be resolved (no site has jExperience, or several do). Set `jcustomer.site.key` to the site the connector serves.
 - **Outbound: a profile edit isn't reaching Salesforce:** check that *Profile updates* is on (it is what starts the automatic push), then wait for the next poll (every 5 minutes by default) or use "Sync now". Only changes made after the trigger was turned on are pushed. Console/REST profile edits are caught too (via `systemProperties.lastUpdated`). The poll log reports `created` / `updated` / `skipped` / `errors`; `skipped` means nothing was sent (no mapping, no mapped value, or a record Salesforce cannot create).
 - **Outbound: "Cannot create Lead/Contact"** - Salesforce requires `LastName` (+ `Company` for Lead) to create; map them, or existing records still update.

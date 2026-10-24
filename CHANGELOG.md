@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spacing uses Moonstone's tokens.
 
 ### Fixed
+- **Inbound: multi-valued jCustomer properties looked empty after a sync.** A Salesforce value was turned into a list only when it contained `;`, so a single choice of a multi-select picklist (`optical-solutions`) was written as plain text to a multi-valued jCustomer property. jCustomer stores it as given: jExperience shows the property empty and list conditions never match, while the history reports the field as updated. Values now take the shape of the jCustomer property type, read through jExperience (cached 5 minutes per site): a list for a multi-valued property (`a;b` split, a single value as a one-item list), the text unchanged for a single-valued one (a `;` in a text is no longer split). Profiles already holding such a text are rewritten as lists on their next sync.
 - The admin screen overflowed narrow panes: Moonstone's content wrapper sized itself on the widest content, so cards were cut on the right, a header tab wrapped under the content could not be clicked, and table cells overlapped. Cards now stack, controls drop under their text, header tabs scroll sideways and wide tables scroll inside their card.
 - Column renderers work with the `DataTable` of Moonstone 2.20+ (jContent 3.7.1 and later), which passes one object instead of `(value, row)`; tables no longer paginate by 5 rows.
 - Labels with a count no longer show as raw keys (the host's i18next does not resolve plural keys).
