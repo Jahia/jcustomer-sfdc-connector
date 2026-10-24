@@ -28,18 +28,25 @@ import java.util.regex.Pattern;
 /**
  * Outbound sync orchestration (jCustomer → Salesforce).
  *
- * <p>Pushes a jCustomer profile into a Salesforce <b>Lead</b>:
+ * <p>Pushes a jCustomer profile to the single configured target object ({@code outboundObject}: Lead or
+ * Contact):
  * <ol>
- *   <li>Apply the outbound mapping (jCustomer property → Lead field).</li>
- *   <li>Resolve the target Lead — by the {@code SFDC_LeadId} stored on the profile, else by email.</li>
- *   <li><b>Update</b> the Lead if found, otherwise <b>create</b> one (create requires Salesforce's
- *       mandatory {@code LastName} + {@code Company} — skipped with a warning if unavailable).</li>
- *   <li>Write the resulting {@code SFDC_LeadId} back onto the profile so later pushes update the
- *       same Lead instead of creating duplicates.</li>
+ *   <li>Apply the outbound mapping of that object: each row sends its jCustomer property, else its value
+ *       if empty; a row without a property sends a fixed value. At least one value must come from the
+ *       profile ({@link #buildFields}).</li>
+ *   <li>Resolve the target record by the id stored on the profile ({@code SFDC_LeadId} /
+ *       {@code SFDC_ContactId}), else by email (open Leads only).</li>
+ *   <li><b>Update</b> it if found, otherwise <b>create</b> one (Salesforce requires {@code LastName}, plus
+ *       {@code Company} for a Lead: skipped with a warning when missing).</li>
+ *   <li>Write the record id back onto the profile so later pushes update the same record.</li>
  * </ol>
  *
- * <p>Targets Lead and/or Contact (whichever has an outbound mapping). Converted leads are excluded
- * from Lead matching (see {@link SfdcApiClient#findSObjectIdByEmail}).
+ * <p>Converted Leads: with the target Lead, a stored Lead that Salesforce converted (its update is
+ * refused) or a person whose only Lead with this email is converted is pushed to the Contact the Lead
+ * became, never created again as a Lead ({@link #pushToConvertedContact}).
+ *
+ * <p>The poll ({@link #runReconcile}) reads every profile changed and every form submitted since the last
+ * run, page by page, retries the profiles whose push failed (5 attempts), and runs one at a time.
  */
 @Component(service = SfdcOutboundSyncService.class, immediate = true)
 public class SfdcOutboundSyncService {
