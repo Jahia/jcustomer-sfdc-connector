@@ -84,8 +84,10 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 ## Build & deploy
 
 ```bash
-JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
+mise exec -- mvn clean install
 ```
+
+Java 17 and Maven 3.8 are pinned in `mise.toml` (under Maven 3.9 the Jahia plugin can write a wrong `Import-Package` while the build still succeeds); without mise, use a Java 17 and a Maven 3.8. The pom declares Jahia's archive repositories, so a machine with an empty `~/.m2` builds too.
 
 The build runs the unit tests (`src/test/java`, JUnit 5: mapping with default values, converted Leads, Salesforce id checks). Produces `target/jcustomer-sfdc-connector-2.6.3.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
@@ -95,6 +97,8 @@ docker cp target/jcustomer-sfdc-connector-2.6.3.jar <jahia-container>:/var/jahia
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
+
+**CI** (`.github/workflows/build.yml`) builds and tests every pull request and every push to `main`, and checks the jar (version, admin screen bundle, no build-machine path in the manifest). Publishing a GitHub release builds its tag and attaches the jar: release jars come from CI, never from a local build. The release steps for maintainers are in `.agents/skills/release/SKILL.md`.
 
 ---
 

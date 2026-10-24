@@ -1,0 +1,74 @@
+# Builds the module and runs its unit tests on every pull request and every push to main.
+# When a GitHub release is published, builds its tag and attaches the jar to the release: release jars
+# come from CI, never from a local build (a local build writes the build machine's path into the
+# manifest, Jahia-Source-Folders).
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      JAHIA_DISABLE_SOURCE_FOLDERS: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17 and Maven 3.8 from mise.toml, as on a developer machine.
+      - uses: jdx/mise-action@v2
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: m2-${{ hashFiles('pom.xml') }}
+          restore-keys: m2-
+
+      - name: Build and test
+        run: mvn -B clean package
+
+      - name: Check the jar
+        run: |
+          set -eu
+          version=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          jar="target/jcustomer-sfdc-connector-${version}.jar"
+          test -f "$jar" || { echo "::error::$jar was not built"; exit 1; }
+          manifest=$(unzip -p "$jar" META-INF/MANIFEST.MF)
+          echo "$manifest" | grep -q "^Bundle-Version: ${version}" || { echo "::error::Bundle-Version is not ${version}"; exit 1; }
+          if echo "$manifest" | grep -q "^Jahia-Source-Folders"; then
+            echo "::error::the manifest holds a build-machine path (Jahia-Source-Folders)"; exit 1
+          fi
+          unzip -l "$jar" | grep -q "javascript/apps/remoteEntry.js$" || { echo "::error::the admin screen bundle (remoteEntry.js) is missing"; exit 1; }
+          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.release.tag_name }}" != "v${version}" ]; then
+            echo "::error::release tag ${{ github.event.release.tag_name }} does not match the pom version ${version}"; exit 1
+          fi
+          echo "JAR=$jar" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module-jar
+          path: ${{ env.JAR }}
+          if-no-files-found: error
+
+  attach-to-release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: module-jar
+          path: dist
+      - name: Attach the jar to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.jar --clobber --repo "${{ github.repository }}"
