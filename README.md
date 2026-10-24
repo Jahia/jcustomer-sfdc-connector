@@ -84,11 +84,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.5.0.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.6.0.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.5.0.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.6.0.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -108,8 +108,9 @@ PID `org.jahia.community.jcustomer.sfdc` (`src/main/resources/META-INF/configura
 | `sfdc.batch.size` | `200` | Max records per SOQL page |
 | `sync.delta.buffer.minutes` | `5` | Clock-skew buffer for delta / poll |
 | `outbound.poll.cron` | `0 0/5 * * * ?` | jCustomer to Salesforce poll schedule while *Profile updates* or *Form submissions* is on, unless one is chosen in the Triggers tab. The default lives in the component configuration, so it also applies to existing installs (whose `.cfg` is never rewritten on upgrade). |
-| `history.max.runs` | `100` | Runs kept per direction in the sync history; the oldest are removed beyond it. |
-| `history.max.records.per.run` | `500` | Records detailed per run (counts stay exact; the run is marked truncated beyond it). |
+| `history.retention.days` | `30` | Days a run is kept in the sync history when the History tab has not set the automatic purge of its direction. |
+| `history.purge.cron` | `0 7 * * * ?` | When the automatic purge runs (every hour by default), on the processing server. |
+| `history.max.records.per.run` | `500` | Records detailed per run, at most 1000 (counts stay exact; the run is marked truncated beyond it). |
 | `history.max.value.length` | `200` | Field values longer than this are cut in the history. |
 | `sync.on.login` | `true` | Sync a user immediately on login |
 | `jcustomer.site.key` | *(empty: auto-detect)* | Site the connector works for: its jExperience settings select the jCustomer instance and the key used to update profiles, and its **site administrators may manage this connector**. Empty = the single site with the `jexperience` module installed; set it when several sites have jExperience. A value that is not a site on this server is ignored with a warning. Manual runs from the admin UI use the site the UI is open on. |
@@ -134,7 +135,9 @@ The config is stored under **typed** node types (namespace `jcsfdcnt`, defined i
 
 ### Sync history - stored in JCR (`/settings/jcustomer-sfdc-connector-history`)
 
-Its own root, typed so it is browsable: `jcsfdcnt:historyRoot` → `inbound` / `outbound` (`jcsfdcnt:syncHistory`) → one `jcsfdcnt:syncRun` per run (trigger, status, start/end, created/updated/skipped/error counts) → one `jcsfdcnt:syncRecord` per record (outcome, email, profile id, Salesforce object and id, fields written, message). It holds personal data (emails and field values) copied from both systems: retention is bounded by `history.max.*` and the **Purge history** button.
+Its own root, typed so it is browsable, split by day (UTC) so that no node holds more than a day of runs: `jcsfdcnt:historyRoot` → `inbound` / `outbound` (`jcsfdcnt:syncHistory`) → `yyyy` → `MM` → `dd` (`jcsfdcnt:historyFolder`) → one `jcsfdcnt:syncRun` per run (trigger, status, start/end, created/updated/skipped/error counts) → one `jcsfdcnt:syncRecord` per record (outcome, email, profile id, Salesforce object and id, fields written, message). Runs stored flat by versions before 2.6.0 are moved into their day folder when the module starts.
+
+It holds personal data (emails and field values) copied from both systems, so it is purged automatically: each direction keeps its runs for **30 days** by default, set in its History tab (on/off and number of days, stored as `purgeEnabled` / `retentionDays` on its `jcsfdcnt:syncHistory` node; `history.retention.days` when unset). The purge job runs every hour on the processing server, removes whole days at a time, and the **Purge history** button deletes everything at once.
 
 **Migration from earlier versions:** releases before 2.2.0 stored this config as `nt:unstructured`. The one-time patch `migration/2100-migrate-config-to-typed.groovy` converts an existing `/settings/jcustomer-sfdc-connector` subtree to the typed node types. Deploy the 2.2.0+ jar first (so the CND is registered), then drop the patch into `<jahia>/patches/groovy/`; the Jahia Patcher runs it once and renames it `.installed`. It is idempotent and reads tolerantly of the legacy layout, so re-running or running on an already-typed config is a no-op.
 
@@ -160,6 +163,7 @@ The screen fits narrow panes: cards stack, setting controls drop under their tex
 Each direction has a **History** tab: one row per run (when, trigger: *Scheduled*, *Sync now*, *Login*, *Manual push*; result counts), built with Moonstone's structured `DataTable`. Expanding a run loads its records: who (email, profile id), outcome (created / updated / skipped / error), the Salesforce record, the fields written, and why a record was skipped or failed. Scheduled runs that found no change are not recorded, so a frequent poll does not bury the useful runs; manual runs are always recorded.
 
 - **Export CSV / Export JSON** download the whole history of the direction: CSV has one line per record with its run's columns (a run without records gets one line); JSON keeps runs with their `records`.
+- **Automatic purge**: runs older than the chosen number of days (30 by default) are deleted every hour; turn it off to keep everything until a manual purge. Saving applies it at once and says how many runs it removed.
 - **Purge history** deletes every recorded run of the direction, after a confirmation.
 
 ### Exporting a mapping

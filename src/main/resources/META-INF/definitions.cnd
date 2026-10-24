@@ -68,7 +68,8 @@
  + outbound (jcsfdcnt:outbound)
 
 // Sync history, under its own root /settings/jcustomer-sfdc-connector-history.
-// One node per run of a sync direction, one child per record it touched.
+// <direction>/<yyyy>/<MM>/<dd>/<run>: one node per run, in the folder of the day it started (UTC),
+// one child per record it touched.
 [jcsfdcnt:syncRecord] > jnt:content
  - outcome (string) < 'created', 'updated', 'skipped', 'error'
  - who (string)
@@ -90,7 +91,17 @@
  - truncated (boolean)
  + * (jcsfdcnt:syncRecord)
 
+// A year, month or day folder (UTC): runs live in the day folder, so no node holds too many children.
+[jcsfdcnt:historyFolder] > jnt:content
+ + * (jcsfdcnt:historyFolder)
+ + * (jcsfdcnt:syncRun)
+
+// History of one direction, with its automatic purge (unset: on, history.retention.days days).
+// Runs directly under it come from versions before 2.6.0 and are moved into day folders.
 [jcsfdcnt:syncHistory] > jnt:content
+ - purgeEnabled (boolean)
+ - retentionDays (long)
+ + * (jcsfdcnt:historyFolder)
  + * (jcsfdcnt:syncRun)
 
 [jcsfdcnt:historyRoot] > jnt:content

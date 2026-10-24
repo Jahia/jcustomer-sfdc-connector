@@ -37,5 +37,10 @@
 .cellText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .wrapAny { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 
+/* Moonstone's Pagination wraps in a narrow pane but keeps its height: the wrapped controls fall out of
+   the card. It stays on one line, right-aligned, and scrolls sideways when the pane is too narrow. */
+.paging { min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.paging > * { flex-wrap: nowrap; width: max-content; margin-left: auto; }
+
 /* Long statuses and messages wrap (Moonstone table cells are nowrap). */
 .wrapText { white-space: normal; overflow-wrap: anywhere; min-width: 12rem; }

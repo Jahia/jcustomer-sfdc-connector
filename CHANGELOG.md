@@ -4,6 +4,23 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-10-24
+
+### Added
+- **Automatic purge of the sync history**, set per direction in its History tab (on/off and number of days, **30 days** by default): runs older than that are deleted every hour by a new job on the processing server (`history.purge.cron`, default `0 7 * * * ?`). Saving applies it at once and says how many runs it removed. The default for directions not set in the UI is `history.retention.days`.
+
+### Changed
+- **History stored by day:** runs live in `<direction>/<yyyy>/<MM>/<dd>/` (UTC) under `/settings/jcustomer-sfdc-connector-history` instead of all under one node per direction, so no node holds more than a day of runs (JCR slows down past about a thousand children). New node type `jcsfdcnt:historyFolder`; runs stored by earlier versions are moved into their day folder when the module starts. Purges remove one day per save, never the whole history in a single transaction.
+- `history.max.records.per.run` is capped at 1000 (higher values are lowered, with a warning).
+- The history is always read and written in the `default` workspace, whatever the workspace of the request that recorded a run.
+- An error answered by an action is shown with its message in the admin screen, not only its HTTP status.
+
+### Fixed
+- **History: opening a run on page 2 or later went back to page 1.** The table's own pagination returned to the first page whenever its data changed, and opening a run changes it (its records arrive). The runs are now paged by the screen itself, under the table; the pagination also stays inside its card in a narrow pane.
+
+### Removed
+- `history.max.runs`: the history is bounded by the retention in days instead.
+
 ## [2.5.0] - 2026-10-24
 
 ### Added
