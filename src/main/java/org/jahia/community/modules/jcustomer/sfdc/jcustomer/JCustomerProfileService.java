@@ -192,7 +192,7 @@ public class JCustomerProfileService {
 
     private static boolean sameValue(Object stored, Object value) {
         // A list to write never matches a stored text: a multi-valued property holding a plain text
-        // (written before 2.4.3) must be rewritten as a list.
+        // (written before 2.5.0) must be rewritten as a list.
         if (value instanceof Collection && stored != null && !(stored instanceof Collection)) return false;
         return Objects.equals(asText(stored), asText(value));
     }
