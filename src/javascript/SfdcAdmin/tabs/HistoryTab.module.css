@@ -12,7 +12,30 @@
 
 /* In a narrow pane the table scrolls sideways instead of truncating every column. */
 .tableScroll { min-width: 0; max-width: 100%; overflow-x: auto; }
-.tableScroll > * { min-width: 640px; }
+.tableScroll > * { min-width: 760px; }
+
+/* Moonstone rows are 48px high and cells hide what overflows: a record's changed fields would be cut.
+   Rows grow with their content here, and keep at least the standard height. */
+.tableScroll tbody tr { height: auto; min-height: 48px; }
+.tableScroll tbody td {
+    height: auto;
+    padding-top: var(--moon-spacing-small);
+    padding-bottom: var(--moon-spacing-small);
+}
+
+/* Column labels wrap in narrow columns instead of ending in an ellipsis. */
+.tableScroll thead tr { height: auto; min-height: 40px; }
+.tableScroll thead th,
+.tableScroll thead th:global(.moonstone-nowrap) {
+    height: auto;
+    white-space: normal;
+    padding-top: var(--moon-spacing-small);
+    padding-bottom: var(--moon-spacing-small);
+}
+
+/* Text in a cell stacks and wraps anywhere (emails, ids, field values have no spaces). */
+.cellText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wrapAny { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 
 /* Long statuses and messages wrap (Moonstone table cells are nowrap). */
 .wrapText { white-space: normal; overflow-wrap: anywhere; min-width: 12rem; }

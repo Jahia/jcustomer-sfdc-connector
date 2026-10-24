@@ -13,6 +13,8 @@ import { absoluteTime, relativeTime } from '../ui/format';
 
 const NS = 'jcustomer-sfdc-connector';
 const OUTCOME_COLOR = { created: 'success', updated: 'accent', skipped: 'warning', error: 'danger' };
+// Widths add up to 100%: DataTable rows are wrapping flex rows. Details (the changed fields) get the most room.
+const WIDTHS = { when: '26%', what: '14%', result: '22%', detail: '38%' };
 const COUNTS = [
     ['created', 'success'], ['updated', 'accent'], ['skipped', 'warning'], ['errors', 'danger']
 ];
@@ -24,6 +26,18 @@ const COUNTS = [
  * isStructured/subRows: the UI uses the host's Moonstone at runtime (Module Federation singleton), and
  * renderRow / onExpandChange differ between Moonstone versions.
  */
+/** One changed field, stored as "Name=value": the name in bold, the value after it. */
+const FieldLine = ({ field }) => {
+    const at = field.indexOf('=');
+    if (at < 1) return <Typography variant="caption" className={classes.wrapAny}>{field}</Typography>;
+    return (
+        <Typography variant="caption" className={classes.wrapAny}>
+            <Typography component="span" variant="caption" weight="bold">{field.slice(0, at)}</Typography>
+            {' '}{field.slice(at + 1)}
+        </Typography>
+    );
+};
+
 const RecordsLoader = ({ runId, onLoad }) => {
     useEffect(() => { onLoad(runId); }, [runId, onLoad]);
     return <Loader size="small" />;
@@ -109,7 +123,7 @@ export default function HistoryTab({ direction }) {
 
     const columns = [
         {
-            key: 'when', label: t(`${NS}:history.col.when`),
+            key: 'when', width: WIDTHS.when, label: t(`${NS}:history.col.when`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return <RecordsLoader runId={row.runId} onLoad={loadRecords} />;
                 if (row.kind === 'run') return (
@@ -118,15 +132,15 @@ export default function HistoryTab({ direction }) {
                     </Tooltip>
                 );
                 return (
-                    <div>
-                        <Typography variant="body">{v.who || t(`${NS}:history.unknownWho`)}</Typography>
-                        {v.profileId && <Typography variant="caption">{v.profileId}</Typography>}
+                    <div className={classes.cellText}>
+                        <Typography variant="body" className={classes.wrapAny}>{v.who || t(`${NS}:history.unknownWho`)}</Typography>
+                        {v.profileId && <Typography variant="caption" className={classes.wrapAny}>{v.profileId}</Typography>}
                     </div>
                 );
             })
         },
         {
-            key: 'what', label: t(`${NS}:history.col.what`),
+            key: 'what', width: WIDTHS.what, label: t(`${NS}:history.col.what`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'run') return <Typography variant="body">{t(`${NS}:history.trigger.${v.trigger}`)}</Typography>;
@@ -134,11 +148,11 @@ export default function HistoryTab({ direction }) {
             })
         },
         {
-            key: 'result', label: t(`${NS}:history.col.result`),
+            key: 'result', width: WIDTHS.result, label: t(`${NS}:history.col.result`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'record') {
-                    return <Typography variant="body">{[v.sfObject, v.sfId].filter(Boolean).join(' ')}</Typography>;
+                    return <Typography variant="body" className={classes.wrapAny}>{[v.sfObject, v.sfId].filter(Boolean).join(' ')}</Typography>;
                 }
                 const chips = COUNTS.filter(([k]) => v[k] > 0)
                     .map(([k, color]) => <Chip key={k} color={color} label={t(`${NS}:history.count.${k}`, { count: v[k] })} />);
@@ -147,7 +161,7 @@ export default function HistoryTab({ direction }) {
             })
         },
         {
-            key: 'detail', label: t(`${NS}:history.col.details`),
+            key: 'detail', width: WIDTHS.detail, label: t(`${NS}:history.col.details`),
             render: cell((v, row) => {
                 if (row.kind === 'loading') return null;
                 if (row.kind === 'run') {
@@ -159,9 +173,9 @@ export default function HistoryTab({ direction }) {
                     );
                 }
                 return (
-                    <div className={classes.wrapText}>
-                        {(v.fields || []).map((f, i) => <Typography key={i} variant="caption" className={classes.wrapText}>{f}</Typography>)}
-                        {v.message && <Typography variant="caption" className={classes.wrapText}>{v.message}</Typography>}
+                    <div className={classes.cellText}>
+                        {(v.fields || []).map((f, i) => <FieldLine key={i} field={f} />)}
+                        {v.message && <Typography variant="caption" className={classes.wrapAny}>{v.message}</Typography>}
                     </div>
                 );
             })

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Connection grouped into org, Connected App and private key, with a how-to for the key; the result of *Test connection* is shown in place.
 - Run-now results are shown next to the button that produced them, not at the top of the page.
 - History dates are relative (*5 hours ago*), the exact date in a tooltip.
+- **History: every changed field is visible.** Moonstone table rows are a fixed 48 px and cut what does not fit, so a record that changed several fields showed only part of them. Rows now grow with their content, each field reads *name* (bold) and value, the Details column gets the most room, long emails and ids wrap, and column labels wrap instead of ending in an ellipsis.
 - Spacing uses Moonstone's tokens.
 
 ### Fixed
