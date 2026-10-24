@@ -15,5 +15,6 @@ Choices already made, with the reason. Change one only on purpose, and record th
 | History stored by UTC day, purged after 30 days by default, per direction from the UI | JCR slows down past about a thousand children; the history holds personal data (2.6.0) |
 | History paged by the screen, not by `DataTable` | `DataTable` returns to page 1 whenever its data changes, and opening a run changes it (2.6.0) |
 | Product defaults in the components' `@interface Config`, not the shipped `.cfg` | The `.cfg` carries `# default configuration` and is never rewritten on upgrade |
+| `jahia-impl` without its transitive dependencies; the APIs used declared one by one | A cold build resolved 345 artifacts through four repositories (about 40 minutes on CI); the manifest stays identical (2.6.4) |
 | Release jars built by CI from the published release's tag | A local build writes the build machine's path into the manifest (`Jahia-Source-Folders`) (2.6.3) |
 | Releases are GitHub releases with the jar; the Jahia Store listing is uploaded by hand from the Store pack | The module has never been on Nexus |
