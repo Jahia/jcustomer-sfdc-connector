@@ -4,6 +4,11 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2026-10-24
+
+### Fixed
+- **Inbound: multi-valued jCustomer properties looked empty after a sync.** A Salesforce value was turned into a list only when it contained `;`, so a single choice of a multi-select picklist (`optical-solutions`) was written as plain text to a multi-valued jCustomer property. jCustomer stores it as given: jExperience shows the property empty and list conditions never match, while the history reports the field as updated. Values now take the shape of the jCustomer property type, read through jExperience (cached 5 minutes per site): a list for a multi-valued property (`a;b` split, a single value as a one-item list), the text unchanged for a single-valued one (a `;` in a text is no longer split). Profiles already holding such a text are rewritten as lists on their next sync.
+
 ## [2.4.1] - 2026-10-23
 
 ### Fixed
