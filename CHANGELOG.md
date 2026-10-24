@@ -4,6 +4,11 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3] - 2026-10-24
+
+### Fixed
+- Saving or reading a field mapping now requires a Salesforce object the direction maps (Contact, Account or Lead inbound; Lead or Contact outbound); any other value is answered with HTTP 400 and nothing is written. Configuration node names are checked to be plain names.
+
 ## [2.6.2] - 2026-10-24
 
 ### Added

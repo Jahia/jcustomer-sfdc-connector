@@ -87,11 +87,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-The build runs the unit tests (`src/test/java`, JUnit 5: mapping with default values, converted Leads, Salesforce id checks). Produces `target/jcustomer-sfdc-connector-2.6.2.jar`. Deploy into a running instance's hot-deploy
+The build runs the unit tests (`src/test/java`, JUnit 5: mapping with default values, converted Leads, Salesforce id checks). Produces `target/jcustomer-sfdc-connector-2.6.3.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.6.2.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.6.3.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.

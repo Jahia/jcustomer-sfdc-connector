@@ -139,7 +139,25 @@ public class ConnectorConfigService {
     public List<Map<String, String>> loadOutboundMapping(String sfObject) { return loadMappingAt(OUTBOUND_MAPPING_NODE, sfObject); }
     public void saveOutboundMapping(String sfObject, List<Map<String, String>> m) throws Exception { saveMapping(true, sfObject, m); }
 
+    /** Salesforce objects each direction maps; their mapping node is named after them. */
+    static final Set<String> INBOUND_OBJECTS  = Set.of("Contact", "Account", "Lead");
+    static final Set<String> OUTBOUND_OBJECTS = Set.of("Lead", "Contact");
+
+    /**
+     * Returns {@code sfObject} when the direction maps it.
+     *
+     * @throws IllegalArgumentException for any other value
+     */
+    static String requireMappedObject(boolean outbound, String sfObject) {
+        if (sfObject == null || !(outbound ? OUTBOUND_OBJECTS : INBOUND_OBJECTS).contains(sfObject)) {
+            throw new IllegalArgumentException("Unsupported Salesforce object for the " + (outbound ? "outbound" : "inbound")
+                    + " mapping: " + sfObject + " (expected one of " + (outbound ? OUTBOUND_OBJECTS : INBOUND_OBJECTS) + ")");
+        }
+        return sfObject;
+    }
+
     private List<Map<String, String>> loadMappingAt(String baseNode, String sfObject) {
+        requireMappedObject(OUTBOUND_MAPPING_NODE.equals(baseNode), sfObject);
         List<Map<String, String>> result = new ArrayList<>();
         try {
             JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
@@ -165,6 +183,7 @@ public class ConnectorConfigService {
     }
 
     private void saveMapping(boolean outbound, String sfObject, List<Map<String, String>> mappings) throws Exception {
+        requireMappedObject(outbound, sfObject);
         JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
             JCRNodeWrapper folder = ensureObjectMapping(session, outbound, sfObject);
             NodeIterator it = folder.getNodes();
@@ -410,7 +429,13 @@ public class ConnectorConfigService {
         return ensureChild(mappingSet, sfObject, NT_OBJECT_MAPPING);
     }
 
+    /** A child of the configuration tree: a plain name, never a path. */
+    private static final java.util.regex.Pattern CHILD_NAME = java.util.regex.Pattern.compile("[A-Za-z][A-Za-z0-9_-]*");
+
     private static JCRNodeWrapper ensureChild(JCRNodeWrapper parent, String name, String type) throws RepositoryException {
+        if (name == null || !CHILD_NAME.matcher(name).matches()) {
+            throw new IllegalArgumentException("Invalid configuration node name: " + name);
+        }
         if (parent.hasNode(name)) return (JCRNodeWrapper) parent.getNode(name);
         return (JCRNodeWrapper) parent.addNode(name, type);
     }
