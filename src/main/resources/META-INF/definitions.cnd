@@ -44,6 +44,7 @@
  - reconcileCron (string)
 
 // Last-run state, shared by inbound and outbound (all properties optional)
+// retryProfiles (outbound only): profiles whose push failed, retried by the next poll, each as <profileId>:<failed attempts>
 [jcsfdcnt:syncState] > jnt:content
  - lastSyncAt (date)
  - lastReconcileAt (date)
@@ -52,6 +53,7 @@
  - lastSyncUpdated (long)
  - lastSyncCreated (long)
  - lastSyncErrors (long)
+ - retryProfiles (string) multiple
 
 // Outbound container
 [jcsfdcnt:outbound] > jnt:content

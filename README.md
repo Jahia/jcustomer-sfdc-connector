@@ -55,9 +55,10 @@ directions.
 
 Poll-based, following the approach of Jahia's official [Workato Unomi connector](https://github.com/Jahia/workato-unomi-connector) - no custom Unomi plugin, no webhook, nothing deployed into the jCustomer container:
 
-1. Poll `/cxs/profiles/search` for profiles changed since the last run (`systemProperties.lastUpdated`), and `/cxs/events/search` for recent **form** events.
+1. Poll `/cxs/profiles/search` for profiles changed since the last run (`systemProperties.lastUpdated`), and `/cxs/events/search` for recent **form** events. Every change since the last run is read, 200 at a time, oldest first, up to the start of the run: a bulk import is pushed whole, however many profiles it touched and even when thousands share the same second.
 2. For each changed profile (with an email), push to the configured **target object** - **Lead** or **Contact** (chosen in the Triggers tab).
 3. Resolve the target record by the stored id (`SFDC_LeadId` / `SFDC_ContactId`) then email; **update** if found, **create** if not. The new id is written back to the profile for idempotent future updates.
+4. A profile whose push fails (Salesforce unreachable, a validation rule, an API limit) is kept in a retry list (`retryProfiles` on `/settings/jcustomer-sfdc-connector/outbound/syncState`) and pushed again by the next polls, **5 attempts** in all; then it is dropped with an error in the History tab. At most 1000 profiles wait for a retry. A poll that fails as a whole (jCustomer unreachable) leaves the watermark where it was, so the next poll reads the same changes again. Only one poll runs at a time: *Sync now* while a poll runs is skipped.
 
 Create requirements are per object (Salesforce rules): **Lead** needs `LastName` + `Company`, **Contact** needs `LastName`. Missing → skipped with a warning (updates still work). Converted Leads are excluded from matching.
 
@@ -84,11 +85,11 @@ Create requirements are per object (Salesforce rules): **Lead** needs `LastName`
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn clean install
 ```
 
-Produces `target/jcustomer-sfdc-connector-2.6.0.jar`. Deploy into a running instance's hot-deploy
+Produces `target/jcustomer-sfdc-connector-2.6.1.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.6.0.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.6.1.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.

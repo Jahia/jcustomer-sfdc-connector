@@ -336,6 +336,59 @@ public class ConnectorConfigService {
         }
     }
 
+    /**
+     * Profiles whose outbound push failed and that the next poll retries, oldest first.
+     *
+     * @return profile id → failed attempts so far; empty when none
+     */
+    public Map<String, Integer> loadOutboundRetries() {
+        Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                if (!session.nodeExists(OUTBOUND_STATE_NODE)) return null;
+                JCRNodeWrapper state = (JCRNodeWrapper) session.getNode(OUTBOUND_STATE_NODE);
+                if (!state.hasProperty("retryProfiles")) return null;
+                for (javax.jcr.Value v : state.getProperty("retryProfiles").getValues()) {
+                    String entry = v.getString();
+                    int at = entry.lastIndexOf(':');
+                    if (at < 1) continue;
+                    try {
+                        out.put(entry.substring(0, at), Integer.parseInt(entry.substring(at + 1)));
+                    } catch (NumberFormatException ignored) {
+                        // a malformed entry is dropped
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            logger.warn("[SFDC-Config] Could not read the outbound retry list: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Replaces the list of profiles the next outbound poll retries.
+     *
+     * @param retries profile id → failed attempts so far, oldest first; empty clears the list
+     */
+    public void saveOutboundRetries(Map<String, Integer> retries) {
+        try {
+            JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
+                JCRNodeWrapper state = ensureChild(ensureOutbound(session), "syncState", NT_SYNC_STATE);
+                if (retries.isEmpty()) {
+                    if (state.hasProperty("retryProfiles")) state.getProperty("retryProfiles").remove();
+                } else {
+                    state.setProperty("retryProfiles", retries.entrySet().stream()
+                            .map(e -> e.getKey() + ":" + e.getValue()).toArray(String[]::new));
+                }
+                session.save();
+                return null;
+            });
+        } catch (Exception e) {
+            logger.error("[SFDC-Config] Could not save the outbound retry list", e);
+        }
+    }
+
     // ── Typed-node helpers ────────────────────────────────────────────────────
 
     private JCRNodeWrapper getOrCreateRoot(JCRSessionWrapper session) throws RepositoryException {

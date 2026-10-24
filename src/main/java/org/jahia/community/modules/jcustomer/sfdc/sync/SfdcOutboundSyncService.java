@@ -16,11 +16,13 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -118,27 +120,60 @@ public class SfdcOutboundSyncService {
         }
     }
 
-    /**
-     * Reconcile sweep: pushes every jCustomer profile changed since the last run (with an email) to
-     * Salesforce. Catches profile edits that emit no Unomi event (console/REST/batch), which the
-     * event webhook cannot see. Idempotent — updates the Lead matched by the stored {@code
-     * SFDC_LeadId} / email, so re-processing a profile is a harmless no-op update.
-     *
-     * @param bufferMinutes clock-skew buffer subtracted from the last-run timestamp
-     * @param maxProfiles   safety cap on profiles processed per run
-     */
     private static final Pattern UUID_RE =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
-    public void runReconcile(String siteKey, int bufferMinutes, int maxProfiles, Trigger trigger) {
+    /** Profiles or events read from jCustomer per request. */
+    static final int PAGE_SIZE = 200;
+    /** A profile whose push fails is tried this many times in all (the first push included), then dropped. */
+    static final int MAX_ATTEMPTS = 5;
+    /** At most this many profiles wait for a retry; beyond it the oldest are dropped. */
+    static final int MAX_RETRIES = 1000;
+
+    /** One poll at a time: the scheduled poll and "Sync now" share the watermark and the retry list. */
+    private final AtomicBoolean polling = new AtomicBoolean();
+
+    /** Counts of one poll. */
+    private static final class Tally {
+        long created, updated, skipped, errors;
+        final Set<String> attempted = new HashSet<>();
+    }
+
+    /**
+     * Poll: pushes every jCustomer profile changed since the last run (with an email), and the profile
+     * of every form submitted since then, to Salesforce; then retries the profiles whose push failed
+     * before. Catches profile edits that emit no Unomi event (console/REST/batch). Idempotent: updates
+     * the record matched by the stored id / email, so pushing a profile twice is a harmless update.
+     *
+     * <p>Every change since the last run is read, page by page ({@link #PAGE_SIZE}), up to the start of
+     * this run: nothing is left behind when more changed than a page holds. The watermark then moves to
+     * the start of this run. A profile whose push fails is kept in a retry list and pushed again by the
+     * next polls, {@link #MAX_ATTEMPTS} times in all. Only one poll runs at a time.
+     *
+     * @param bufferMinutes clock-skew buffer subtracted from the last-run timestamp
+     */
+    public void runReconcile(String siteKey, int bufferMinutes, Trigger trigger) {
         Run run = startRun(trigger);
+        if (!polling.compareAndSet(false, true)) {
+            logger.info("[SFDC-Outbound] Poll skipped - the previous poll is still running");
+            finish(run, "skipped: the previous poll is still running");
+            return;
+        }
+        try {
+            reconcile(siteKey, bufferMinutes, run);
+        } finally {
+            polling.set(false);
+        }
+    }
+
+    private void reconcile(String siteKey, int bufferMinutes, Run run) {
         if (siteKey == null || siteKey.isBlank()) {
             logger.error("[SFDC-Outbound] Reconcile skipped - no site resolved (see the [SFDC-Site] message)");
             finish(run, "error: no site resolved - set jcustomer.site.key");
             return;
         }
-        long updated = 0, created = 0, skipped = 0, errors = 0;
-        Instant runStart = Instant.now();
+        Tally tally = new Tally();
+        Instant runStart = Instant.now().truncatedTo(ChronoUnit.MILLIS);   // jCustomer dates are in ms at most
         try {
             Map<String, String> triggers = configService.loadOutboundTriggers();
             boolean doProfiles = "true".equalsIgnoreCase(triggers.get("onProfileUpdate"));
@@ -168,66 +203,131 @@ public class SfdcOutboundSyncService {
                 finish(run, "started: pushing changes made from " + runStart);
                 return;
             }
-            Instant cutoff = Instant.parse(last).minus(bufferMinutes, ChronoUnit.MINUTES);
-            String cutoffIso = cutoff.toString();
-            logger.info("[SFDC-Outbound] Poll starting site={} since={} (profiles={}, forms={})", siteKey, cutoff, doProfiles, doForms);
+            String fromIso = Instant.parse(last).minus(bufferMinutes, ChronoUnit.MINUTES).toString();
+            String toIso = runStart.toString();
+            logger.info("[SFDC-Outbound] Poll starting site={} changes in ({}, {}] (profiles={}, forms={})",
+                    siteKey, fromIso, toIso, doProfiles, doForms);
 
-            Set<String> pushed = new HashSet<>();
+            Map<String, Integer> retries = configService.loadOutboundRetries();
 
-            // 1) Profiles changed since cutoff (covers profile updates, incl. form-driven property changes).
+            // 1) Profiles changed in the window (covers profile updates, incl. form-driven property changes).
             if (doProfiles) {
-                for (Map<String, Object> profile : profileService.searchProfilesModifiedSince(cutoffIso, siteKey, maxProfiles)) {
-                    String id = asString(profile.get("itemId"));
-                    if (id == null || !UUID_RE.matcher(id).matches()) continue; // skip technical / merged profiles
-                    try {
-                        switch (pushProfile(profile, siteKey, run)) {
-                            case CREATED: created++; break;
-                            case UPDATED: updated++; break;
-                            default:      skipped++; break;
-                        }
-                        pushed.add(id);
-                    } catch (Exception e) {
-                        errors++;
-                        logger.error("[SFDC-Outbound] Poll error for profile {}: {}", id, e.getMessage());
-                        rec(run, Outcome.ERROR, emailOf(profile), id, null, null, null, e.getMessage());
+                String afterTime = null, afterId = null;
+                List<Map<String, Object>> page;
+                do {
+                    page = profileService.searchProfilesChanged(fromIso, toIso, afterTime, afterId, siteKey, PAGE_SIZE);
+                    for (Map<String, Object> profile : page) {
+                        String id = asString(profile.get("itemId"));
+                        if (id == null || !UUID_RE.matcher(id).matches()) continue; // skip technical / merged profiles
+                        push(profile, id, siteKey, run, tally, retries);
                     }
-                }
+                    if (!page.isEmpty()) {
+                        Map<String, Object> lastProfile = page.get(page.size() - 1);
+                        afterTime = asString(systemProperty(lastProfile, "lastUpdated"));
+                        afterId = asString(lastProfile.get("itemId"));
+                    }
+                } while (page.size() == PAGE_SIZE && afterTime != null && afterId != null);
             }
 
-            // 2) Form events since cutoff — push each event's profile once (not already pushed above).
+            // 2) Form events in the window: push each event's profile once (not already pushed above).
             if (doForms) {
-                for (Map<String, Object> event : profileService.searchFormEventsSince(cutoffIso, siteKey, maxProfiles)) {
-                    String pid = asString(event.get("profileId"));
-                    if (pid == null || !UUID_RE.matcher(pid).matches() || pushed.contains(pid)) continue;
-                    try {
+                String afterTime = null, afterId = null;
+                List<Map<String, Object>> page;
+                do {
+                    page = profileService.searchFormEvents(fromIso, toIso, afterTime, afterId, siteKey, PAGE_SIZE);
+                    for (Map<String, Object> event : page) {
+                        String pid = asString(event.get("profileId"));
+                        if (pid == null || !UUID_RE.matcher(pid).matches() || tally.attempted.contains(pid)) continue;
                         Map<String, Object> profile = profileService.getProfileById(pid, siteKey);
-                        if (profile == null) continue;
-                        switch (pushProfile(profile, siteKey, run)) {
-                            case CREATED: created++; break;
-                            case UPDATED: updated++; break;
-                            default:      skipped++; break;
-                        }
-                        pushed.add(pid);
-                    } catch (Exception e) {
-                        errors++;
-                        logger.error("[SFDC-Outbound] Poll error for form-event profile {}: {}", pid, e.getMessage());
-                        rec(run, Outcome.ERROR, null, pid, null, null, null, e.getMessage());
+                        if (profile != null) push(profile, pid, siteKey, run, tally, retries);
                     }
-                }
+                    if (!page.isEmpty()) {
+                        Map<String, Object> lastEvent = page.get(page.size() - 1);
+                        afterTime = asString(lastEvent.get("timeStamp"));
+                        afterId = asString(lastEvent.get("itemId"));
+                    }
+                } while (page.size() == PAGE_SIZE && afterTime != null && afterId != null);
             }
 
-            // Advance the watermark to the run start so edits during/after the run are caught next time.
+            // 3) Profiles whose push failed in an earlier poll, not pushed again above.
+            for (String pid : new ArrayList<>(retries.keySet())) {
+                if (tally.attempted.contains(pid)) continue;
+                Map<String, Object> profile = profileService.getProfileById(pid, siteKey);
+                if (profile == null) {
+                    retries.remove(pid);                       // deleted or merged in jCustomer
+                    continue;
+                }
+                push(profile, pid, siteKey, run, tally, retries);
+            }
+            dropExhausted(retries, run);
+            configService.saveOutboundRetries(retries);
+
+            // Every change up to the start of this run was read: move the watermark there.
             configService.setOutboundReconcileAt(runStart.toString());
-            configService.saveOutboundSyncState("poll: " + pushed.size() + " profiles, " + skipped + " skipped",
-                    updated, created, errors);
-            logger.info("[SFDC-Outbound] Poll complete - profiles={}, created={}, updated={}, skipped={}, errors={}",
-                    pushed.size(), created, updated, skipped, errors);
+            configService.saveOutboundSyncState("poll: " + tally.attempted.size() + " profiles, " + tally.skipped
+                    + " skipped, " + retries.size() + " to retry", tally.updated, tally.created, tally.errors);
+            logger.info("[SFDC-Outbound] Poll complete - profiles={}, created={}, updated={}, skipped={}, errors={}, to retry={}",
+                    tally.attempted.size(), tally.created, tally.updated, tally.skipped, tally.errors, retries.size());
             finish(run, "success");
         } catch (Exception e) {
-            configService.saveOutboundSyncState("poll-error: " + e.getMessage(), updated, created, errors + 1);
+            // The watermark stays where it was: the next poll reads this window again.
+            configService.saveOutboundSyncState("poll-error: " + e.getMessage(), tally.updated, tally.created, tally.errors + 1);
             logger.error("[SFDC-Outbound] Poll failed", e);
             finish(run, "error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Pushes one profile of the poll. A success clears it from the retry list; a failure adds it, or
+     * counts one more attempt.
+     */
+    private void push(Map<String, Object> profile, String profileId, String siteKey, Run run, Tally tally,
+                      Map<String, Integer> retries) {
+        tally.attempted.add(profileId);
+        try {
+            switch (pushProfile(profile, siteKey, run)) {
+                case CREATED: tally.created++; break;
+                case UPDATED: tally.updated++; break;
+                default:      tally.skipped++; break;
+            }
+            retries.remove(profileId);
+        } catch (Exception e) {
+            tally.errors++;
+            int attempts = retries.getOrDefault(profileId, 0) + 1;
+            retries.remove(profileId);                         // re-inserted last: the list stays oldest first
+            retries.put(profileId, attempts);
+            String message = e.getMessage() + (attempts < MAX_ATTEMPTS
+                    ? " (attempt " + attempts + " of " + MAX_ATTEMPTS + ", retried by the next poll)"
+                    : " (attempt " + attempts + " of " + MAX_ATTEMPTS + ", not retried)");
+            logger.error("[SFDC-Outbound] Push failed for profile {}: {}", profileId, message);
+            rec(run, Outcome.ERROR, emailOf(profile), profileId, null, null, null, message);
+        }
+    }
+
+    /** Drops profiles that used all their attempts, and the oldest beyond {@link #MAX_RETRIES}. */
+    private static void dropExhausted(Map<String, Integer> retries, Run run) {
+        retries.entrySet().removeIf(e -> {
+            if (e.getValue() < MAX_ATTEMPTS) return false;
+            logger.error("[SFDC-Outbound] Profile {} not pushed after {} attempts - dropped from the retry list",
+                    e.getKey(), MAX_ATTEMPTS);
+            return true;
+        });
+        int excess = retries.size() - MAX_RETRIES;
+        if (excess > 0) {
+            List<String> oldest = new ArrayList<>(retries.keySet()).subList(0, excess);
+            logger.error("[SFDC-Outbound] Retry list full ({} profiles): the {} oldest are dropped", retries.size(), excess);
+            for (String pid : oldest) {
+                retries.remove(pid);
+                rec(run, Outcome.ERROR, null, pid, null, null, null, "dropped from the retry list: more than "
+                        + MAX_RETRIES + " profiles waiting");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object systemProperty(Map<String, Object> item, String name) {
+        Object sp = item.get("systemProperties");
+        return sp instanceof Map ? ((Map<String, Object>) sp).get(name) : null;
     }
 
     /** Outcome of pushing one profile: a Salesforce record was created or updated, or nothing was sent. */

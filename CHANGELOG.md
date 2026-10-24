@@ -4,6 +4,13 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2026-10-24
+
+### Fixed
+- **jCustomer to Salesforce: changes beyond 500 profiles were never pushed.** A poll read at most 500 changed profiles (and 500 form events), oldest first, then moved its watermark to the start of the run: after a bulk import or a busy campaign, the rest were skipped until they changed again. A poll now reads every change since the last run, 200 at a time, continuing after the last profile read (by update time and id, so profiles sharing the same second are neither skipped nor read twice), up to the start of the run.
+- **jCustomer to Salesforce: a profile whose push failed was not retried.** It was logged, then left behind by the watermark until it changed again. Failed profiles are now kept in a retry list and pushed again by the next polls, 5 attempts in all, then dropped with an error in the History tab (each error says which attempt it was). At most 1000 profiles wait for a retry.
+- *Sync now* and the scheduled poll could run at the same time and race on the watermark; only one poll runs at a time now (the other is skipped).
+
 ## [2.6.0] - 2026-10-24
 
 ### Added
