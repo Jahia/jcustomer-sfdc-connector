@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.6.3] - 2026-10-24
 
+### Added
+- **CI** (`.github/workflows/build.yml`): every pull request and push to `main` is built with Java 17 and Maven 3.8 and runs the unit tests, and the jar is checked (version, admin screen bundle, no build-machine path in the manifest). Publishing a GitHub release builds its tag and attaches the jar, so release jars no longer come from a local build (the 2.6.2 jar and earlier carry the path of the machine that built them in `Jahia-Source-Folders`).
+- `mise.toml` pins Java 17 and Maven 3.8 for local builds and CI.
+- `.agents/`: the module's agent harness (architecture, decisions, environments and testing without writing to Salesforce, release steps).
+
+### Changed
+- `pom.xml` declares Jahia's archive repositories (releases and third-party), as repositories and plugin repositories: since 2026-10-22 a machine with an empty Maven repository could not resolve the older releases the Jahia 8.2 parent depends on.
+
 ### Fixed
 - Saving or reading a field mapping now requires a Salesforce object the direction maps (Contact, Account or Lead inbound; Lead or Contact outbound); any other value is answered with HTTP 400 and nothing is written. Configuration node names are checked to be plain names.
 

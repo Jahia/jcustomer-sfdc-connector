@@ -88,7 +88,51 @@
             <releases><enabled>true</enabled><updatePolicy>never</updatePolicy></releases>
             <snapshots><enabled>true</enabled></snapshots>
         </repository>
+        <!-- Older releases the 8.2 parent depends on (jahia-commons 1.0.8, Spring 3.2.18.RELEASE_OSGI)
+             are served only from Jahia's archives since 2026-10-22: a fresh build machine (CI) fails
+             without them. Plugin repositories too: jahia-maven-plugin depends on jahia-commons. -->
+        <repository>
+            <id>jahia-releases-archives</id>
+            <name>Jahia Releases Archive</name>
+            <url>https://archives-devtools.jahia.com/jahia-releases</url>
+            <releases><enabled>true</enabled><updatePolicy>never</updatePolicy></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <repository>
+            <id>jahia-thirdparty-archives</id>
+            <name>Jahia Third-Party Releases Archive</name>
+            <url>https://archives-devtools.jahia.com/thirdparty-releases</url>
+            <releases><enabled>true</enabled><updatePolicy>never</updatePolicy></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
     </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>jahia-public</id>
+            <name>Jahia Public Repository</name>
+            <url>https://devtools.jahia.com/nexus/content/groups/public</url>
+            <releases><enabled>true</enabled><updatePolicy>never</updatePolicy></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <!-- See repositories above. Older releases the 8.2 parent depends on (jahia-commons 1.0.8, Spring 3.2.18.RELEASE_OSGI)
+             are served only from Jahia's archives since 2026-10-22: a fresh build machine (CI) fails
+             without them. Plugin repositories too: jahia-maven-plugin depends on jahia-commons. -->
+        <pluginRepository>
+            <id>jahia-releases-archives</id>
+            <name>Jahia Releases Archive</name>
+            <url>https://archives-devtools.jahia.com/jahia-releases</url>
+            <releases><enabled>true</enabled><updatePolicy>never</updatePolicy></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>jahia-thirdparty-archives</id>
+            <name>Jahia Third-Party Releases Archive</name>
+            <url>https://archives-devtools.jahia.com/thirdparty-releases</url>
+            <releases><enabled>true</enabled><updatePolicy>never</updatePolicy></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+    </pluginRepositories>
 
     <build>
         <plugins>
