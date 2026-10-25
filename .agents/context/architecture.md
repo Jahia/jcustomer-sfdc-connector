@@ -59,7 +59,7 @@ marker on purpose: the module rewrites it on every deploy. Reference of keys: RE
 
 `src/javascript/SfdcAdmin`: registered by `SfdcAdmin.routes.jsx` as a Site Settings route
 (`administration-sites`, `requireModuleInstalledOnSite`). Tabs Overview, Connection, then one panel per
-direction with Mapping (`MappingEditor`), Triggers and History (`HistoryTab`, `HistoryRetention`).
+direction with Mapping (`MappingEditor`: outbound value-if-empty controls follow the Salesforce field type from `getSfdcFields`, picklist values included), Triggers and History (`HistoryTab`, `HistoryRetention`).
 Layout helpers in `ui/` (`Section`, `layout.module.css`, `cell()` for the host `DataTable` render
 signature). Calls go through `api.js` (`XMLHttpRequest`).
 

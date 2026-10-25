@@ -102,10 +102,12 @@ public class SfdcApiClient {
 
     /**
      * Returns field metadata for a Salesforce object (e.g., "Contact", "Account").
-     * Each entry: { name, label, type, relationshipName (if lookup) }
+     * Each entry: { name, label, type, relationshipName (if lookup) }, and for a {@code picklist} or
+     * {@code multipicklist}: {@code picklistValues} (its active values, in Salesforce's order) and
+     * {@code restrictedPicklist} (Salesforce refuses any other value).
      */
     @SuppressWarnings("unchecked")
-    public List<Map<String, String>> describeObject(String sobjectName) throws Exception {
+    public List<Map<String, Object>> describeObject(String sobjectName) throws Exception {
         requireSObjectName(sobjectName);
         Map<String, String> cfg = configService.loadConnection();
         String instanceUrl = cfg.get("instanceUrl");
@@ -115,19 +117,33 @@ public class SfdcApiClient {
         String url = instanceUrl + "/services/data/" + apiVersion + "/sobjects/" + sobjectName + "/describe";
         Map<String, Object> response = getJson(url, null);
 
-        List<Map<String, String>> fields = new ArrayList<>();
+        List<Map<String, Object>> fields = new ArrayList<>();
         Object fieldsList = response.get("fields");
         if (fieldsList instanceof List) {
             for (Object f : (List<?>) fieldsList) {
                 if (!(f instanceof Map)) continue;
                 Map<String, Object> field = (Map<String, Object>) f;
-                Map<String, String> entry = new HashMap<>();
+                Map<String, Object> entry = new HashMap<>();
                 entry.put("name",  str(field, "name"));
                 entry.put("label", str(field, "label"));
                 entry.put("type",  str(field, "type"));
                 // For relationship fields, expose the relationship name
                 if (field.containsKey("relationshipName") && field.get("relationshipName") != null) {
                     entry.put("relationshipName", str(field, "relationshipName"));
+                }
+                String type = str(field, "type");
+                if ("picklist".equals(type) || "multipicklist".equals(type)) {
+                    List<String> values = new ArrayList<>();
+                    if (field.get("picklistValues") instanceof List) {
+                        for (Object v : (List<?>) field.get("picklistValues")) {
+                            if (v instanceof Map && !Boolean.FALSE.equals(((Map<String, Object>) v).get("active"))) {
+                                Object value = ((Map<String, Object>) v).get("value");
+                                if (value != null) values.add(value.toString());
+                            }
+                        }
+                    }
+                    entry.put("picklistValues", values);
+                    entry.put("restrictedPicklist", Boolean.TRUE.equals(field.get("restrictedPicklist")));
                 }
                 fields.add(entry);
             }

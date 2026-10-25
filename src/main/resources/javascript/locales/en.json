@@ -129,7 +129,17 @@
       "noProperty": "No property (fixed value)",
       "defaultPlaceholder": "Value if empty (optional)",
       "fixedPlaceholder": "Fixed value",
-      "defaultsHelp": "Value if empty is sent when the profile has no value for the property, for example Company = Web visitor so that a Lead can be created. With No property, the value is always sent. A profile is pushed only when at least one mapped property has a value."
+      "defaultsHelp": "Value if empty is sent when the profile has no value for the property, for example Company = Web visitor so that a Lead can be created. With No property, the value is always sent. A profile is pushed only when at least one mapped property has a value.",
+      "noDefault": "No default",
+      "defaultMultiPlaceholder": "Value1;Value2 (optional)",
+      "notInPicklist": {
+        "title": "Not in the Salesforce picklist: {{fields}}",
+        "text": "These fields accept only their picklist values: Salesforce would refuse the record. Pick the values from the list."
+      },
+      "multiToSingle": {
+        "title": "Several values into a single-value picklist: {{fields}}",
+        "text": "These jCustomer properties can hold several values, sent joined with ; but the Salesforce field takes one value: Salesforce refuses the record when a profile has more than one. Map them to a multi-select picklist or a text field."
+      }
     },
     "sync": {
       "title": "Last synchronisation",

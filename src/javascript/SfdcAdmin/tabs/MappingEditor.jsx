@@ -33,6 +33,8 @@ const CONFIG = {
 
 const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
 const snapshot = rows => JSON.stringify((rows || []).map(r => [r.sfField || '', r.jcProperty || '', r.defaultValue || '']));
+/** Values of a multi-select picklist as Salesforce stores them: Value1;Value2. */
+const splitValues = v => (v || '').split(';').map(x => x.trim()).filter(Boolean);
 /** A row maps something: a Salesforce field fed by a property, a default value, or both. */
 const isMapped = r => !!(r.sfField && (r.jcProperty || r.defaultValue));
 
@@ -124,11 +126,32 @@ export default function MappingEditor({ direction }) {
     const noProperty = { label: t(`${NS}:mapping.noProperty`), value: '' };
     const optionsFor = key => (key === 'sfField' ? sfOptions : (cfg.defaults ? [noProperty, ...jcOptions] : jcOptions));
 
+    // Salesforce field metadata of the current object (type, picklist values), and multi-valued properties.
+    const sfMeta = {};
+    (Array.isArray(sfFields[object]) ? sfFields[object] : []).forEach(f => { sfMeta[f.name] = f; });
+    const picklistOf = field => {
+        const meta = sfMeta[field];
+        return meta && Array.isArray(meta.picklistValues) && meta.picklistValues.length > 0 ? meta.picklistValues : null;
+    };
+    const jcMulti = new Set(jcProps.filter(p => p.multivalued).map(p => p.id));
+
     // Checks
     const targets = current.map(r => r[cfg.target]).filter(Boolean);
     const duplicates = [...new Set(targets.filter((v, i) => targets.indexOf(v) !== i))];
     const mapped = new Set(current.filter(isMapped).map(r => r.sfField));
     const missingRequired = (cfg.requiredToCreate[object] || []).filter(f => !mapped.has(f));
+    // Salesforce refuses a value outside a restricted picklist, and several values in a single-value picklist.
+    const notInPicklist = cfg.defaults ? current.flatMap(r => {
+        const meta = sfMeta[r.sfField];
+        const allowed = picklistOf(r.sfField);
+        if (!r.defaultValue || !allowed || !meta.restrictedPicklist) return [];
+        const given = meta.type === 'multipicklist' ? splitValues(r.defaultValue) : [r.defaultValue.trim()];
+        const unknown = given.filter(x => !allowed.includes(x));
+        return unknown.length ? [`${r.sfField} (${unknown.join(', ')})`] : [];
+    }) : [];
+    const multiToSingle = cfg.defaults
+        ? current.filter(r => r.jcProperty && jcMulti.has(r.jcProperty) && sfMeta[r.sfField]?.type === 'picklist').map(r => r.sfField)
+        : [];
 
     // DataTable rows are wrapping flex rows: the widths must add up to 100% exactly, or the last
     // cell wraps under the first one. The field columns (and the default value) share what the arrow
@@ -155,14 +178,49 @@ export default function MappingEditor({ direction }) {
         fieldColumn(cfg.columns[1]),
         ...(cfg.defaults ? [{
             key: 'defaultValue', width: fluid, label: t(`${NS}:mapping.col.defaultValue`),
-            render: cell((v, row) => (
-                <div className={classes.cellControl}>
-                    <Input id={`sfdc-default-${row._id}`} size="small" value={row.defaultValue || ''}
-                        aria-label={t(`${NS}:mapping.col.defaultValue`)}
-                        placeholder={t(`${NS}:${row.jcProperty ? 'mapping.defaultPlaceholder' : 'mapping.fixedPlaceholder'}`)}
-                        onChange={e => update(row._id, 'defaultValue', e.target.value)} />
-                </div>
-            ))
+            render: cell((v, row) => {
+                const meta = sfMeta[row.sfField];
+                const allowed = picklistOf(row.sfField);
+                const label = t(`${NS}:mapping.col.defaultValue`);
+                // A picklist offers its own values; a multi-select picklist stores them as Value1;Value2.
+                if (allowed && meta.type === 'picklist') {
+                    const data = [{ label: t(`${NS}:mapping.noDefault`), value: '' }, ...allowed.map(x => ({ label: x, value: x }))];
+                    return (
+                        <div className={classes.cellControl}>
+                            <Dropdown key={`default-${row._id}-${row.sfField}`} hasSearch size="small" aria-label={label}
+                                value={row.defaultValue || ''} placeholder={t(`${NS}:mapping.noDefault`)}
+                                data={withValue(data, row.defaultValue)}
+                                onChange={(e, item) => update(row._id, 'defaultValue', item?.value ?? '')} />
+                        </div>
+                    );
+                }
+                if (allowed && meta.type === 'multipicklist') {
+                    const selected = splitValues(row.defaultValue);
+                    const data = [...allowed, ...selected.filter(x => !allowed.includes(x))].map(x => ({ label: x, value: x }));
+                    const toggle = value => {
+                        const next = selected.includes(value) ? selected.filter(x => x !== value) : [...selected, value];
+                        // Salesforce's order, then any value not in the picklist (kept so it can be removed)
+                        update(row._id, 'defaultValue',
+                            [...allowed.filter(x => next.includes(x)), ...next.filter(x => !allowed.includes(x))].join(';'));
+                    };
+                    return (
+                        <div className={classes.cellControl}>
+                            <Dropdown key={`default-${row._id}-${row.sfField}`} hasSearch size="small" aria-label={label}
+                                values={selected} placeholder={t(`${NS}:mapping.defaultMultiPlaceholder`)} data={data}
+                                onChange={(e, item) => { if (item?.value) toggle(item.value); }} />
+                        </div>
+                    );
+                }
+                const placeholder = meta?.type === 'multipicklist' ? 'mapping.defaultMultiPlaceholder'
+                    : (row.jcProperty ? 'mapping.defaultPlaceholder' : 'mapping.fixedPlaceholder');
+                return (
+                    <div className={classes.cellControl}>
+                        <Input id={`sfdc-default-${row._id}`} size="small" value={row.defaultValue || ''}
+                            aria-label={label} placeholder={t(`${NS}:${placeholder}`)}
+                            onChange={e => update(row._id, 'defaultValue', e.target.value)} />
+                    </div>
+                );
+            })
         }] : []),
         {
             key: 'remove', label: '', width: '56px', align: 'right',
@@ -210,6 +268,18 @@ export default function MappingEditor({ direction }) {
                 )}
                 {cfg.defaults && (
                     <Typography variant="caption">{t(`${NS}:mapping.defaultsHelp`)}</Typography>
+                )}
+                {notInPicklist.length > 0 && (
+                    <Banner variant="warning" iconStart={<Warning />}
+                        title={t(`${NS}:mapping.notInPicklist.title`, { fields: notInPicklist.join(', ') })}>
+                        <span>{t(`${NS}:mapping.notInPicklist.text`)}</span>
+                    </Banner>
+                )}
+                {multiToSingle.length > 0 && (
+                    <Banner variant="warning" iconStart={<Warning />}
+                        title={t(`${NS}:mapping.multiToSingle.title`, { fields: multiToSingle.join(', ') })}>
+                        <span>{t(`${NS}:mapping.multiToSingle.text`)}</span>
+                    </Banner>
                 )}
                 {duplicates.length > 0 && (
                     <Banner variant="warning" iconStart={<Warning />} title={t(`${NS}:mapping.duplicates`, { fields: duplicates.join(', ') })}>

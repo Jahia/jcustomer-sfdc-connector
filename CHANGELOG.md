@@ -4,6 +4,14 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.5] - 2026-10-25
+
+### Added
+- **Value if empty for picklists**, in the jCustomer to Salesforce mapping: a picklist field offers its own values in a dropdown, and a multi-select picklist a multi-select dropdown stored the way Salesforce takes it (`Value1;Value2`, in the picklist's order). Other fields keep the text input, with a `Value1;Value2` hint when Salesforce did not list the values.
+- Two warnings in the mapping screen, for records Salesforce would refuse: a default value that is not one of a restricted picklist's values, and a multi-valued jCustomer property mapped to a single-value picklist (its values are sent joined with `;`).
+- The field list the screen loads from Salesforce carries each picklist's active values and whether it is restricted.
+- Unit test: an empty list, or a list of blank entries, counts as empty and sends the value if empty.
+
 ## [2.6.4] - 2026-10-24
 
 No change of behaviour: the bundle's manifest is identical to 2.6.3's.

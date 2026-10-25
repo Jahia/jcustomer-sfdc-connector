@@ -129,7 +129,17 @@
       "noProperty": "Aucune propriété (valeur fixe)",
       "defaultPlaceholder": "Valeur si vide (facultatif)",
       "fixedPlaceholder": "Valeur fixe",
-      "defaultsHelp": "La valeur si vide est envoyée quand le profil n'a pas de valeur pour la propriété, par exemple Société = Visiteur web pour qu'une piste puisse être créée. Avec Aucune propriété, la valeur est toujours envoyée. Un profil n'est envoyé que si au moins une propriété mise en correspondance a une valeur."
+      "defaultsHelp": "La valeur si vide est envoyée quand le profil n'a pas de valeur pour la propriété, par exemple Société = Visiteur web pour qu'une piste puisse être créée. Avec Aucune propriété, la valeur est toujours envoyée. Un profil n'est envoyé que si au moins une propriété mise en correspondance a une valeur.",
+      "noDefault": "Aucune valeur par défaut",
+      "defaultMultiPlaceholder": "Valeur1;Valeur2 (facultatif)",
+      "notInPicklist": {
+        "title": "Absent de la liste de sélection Salesforce : {{fields}}",
+        "text": "Ces champs n'acceptent que les valeurs de leur liste de sélection : Salesforce refuserait la fiche. Choisissez les valeurs dans la liste."
+      },
+      "multiToSingle": {
+        "title": "Plusieurs valeurs dans une liste de sélection à valeur unique : {{fields}}",
+        "text": "Ces propriétés jCustomer peuvent contenir plusieurs valeurs, envoyées jointes par ; mais le champ Salesforce n'en accepte qu'une : Salesforce refuse la fiche quand un profil en a plusieurs. Associez-les à une liste de sélection multiple ou à un champ texte."
+      }
     },
     "sync": {
       "title": "Dernière synchronisation",
