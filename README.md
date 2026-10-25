@@ -89,11 +89,11 @@ mise exec -- mvn clean install
 
 Java 17 and Maven 3.8 are pinned in `mise.toml` (under Maven 3.9 the Jahia plugin can write a wrong `Import-Package` while the build still succeeds); without mise, use a Java 17 and a Maven 3.8. The pom declares Jahia's archive repositories, so a machine with an empty `~/.m2` builds too.
 
-The build runs the unit tests (`src/test/java`, JUnit 5: mapping with default values, converted Leads, Salesforce id checks, mapped objects). Produces `target/jcustomer-sfdc-connector-2.6.4.jar`. Deploy into a running instance's hot-deploy
+The build runs the unit tests (`src/test/java`, JUnit 5: mapping with default values, converted Leads, Salesforce id checks, mapped objects). Produces `target/jcustomer-sfdc-connector-2.6.5.jar`. Deploy into a running instance's hot-deploy
 folder (remove any older versioned jar first so only one version is present):
 
 ```bash
-docker cp target/jcustomer-sfdc-connector-2.6.4.jar <jahia-container>:/var/jahia/modules/
+docker cp target/jcustomer-sfdc-connector-2.6.5.jar <jahia-container>:/var/jahia/modules/
 ```
 
 Alternatively use the Provisioning API or the jContent module manager.
@@ -159,7 +159,7 @@ Four top-level tabs:
 - **Overview**: the state of the whole connector at a glance. The connection (tested on open), and one card per direction with its status (*Active* / *Paused* / *Off*), its triggers in plain words (*On login*, *Every day at 05:00*, *Profile updates*, *Every 5 min*), how many fields each object maps, and the last run (relative time, trigger, result counts), with *Sync now*, *Triggers* and *History* shortcuts. Anything that needs attention (connection not configured, disabled or failing, a direction without mapping, errors in the last run) is listed on top with a button that opens the screen that fixes it.
 - **Connection** *(shared by both directions)*: the on/off switch, the Salesforce org (instance URL, API version), the Connected App (client id, integration user) and the private key, an unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`; convert PKCS#1 with `openssl pkcs8 -topk8 -nocrypt -in old.key -out key.pem`), with a how-to. *Save* is enabled only when something changed; *Test connection* shows its result in place.
 - **SFDC → jCustomer** and **jCustomer → SFDC**, each with three sub-tabs:
-  - **Mapping**: one table per Salesforce object (Contact / Account / Lead inbound, Lead / Contact outbound), the object buttons showing how many fields each maps and a dot when it has unsaved changes. Outbound rows also have a **Value if empty**, and *No property (fixed value)* sends a value always. Rows are edited in place with searchable dropdowns; the screen warns about a target mapped twice and, outbound, about fields Salesforce requires to create a record. The jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown the object's fields, both sorted **alphabetically**.
+  - **Mapping**: one table per Salesforce object (Contact / Account / Lead inbound, Lead / Contact outbound), the object buttons showing how many fields each maps and a dot when it has unsaved changes. Outbound rows also have a **Value if empty**, and *No property (fixed value)* sends a value always. For a picklist the value is chosen from the field's own values, for a multi-select picklist several of them (stored as `Value1;Value2`). A multi-valued jCustomer property is sent joined with `;`; an empty list counts as empty. The screen warns about a value outside a restricted picklist and about a multi-valued property mapped to a single-value picklist, both refused by Salesforce. Rows are edited in place with searchable dropdowns; the screen warns about a target mapped twice and, outbound, about fields Salesforce requires to create a record. The jCustomer-property dropdown lists the connected jCustomer's live profile properties (see the config note above) and the Salesforce-field dropdown the object's fields, both sorted **alphabetically**.
   - **Triggers**: inbound, *On login* and the scheduled batch (cron builder with its schedule in plain words) and *Sync now*. Outbound, the **target object** (Lead or Contact), the triggers (*Profile updates* / *Form submissions*: turning one on starts the automatic push), the schedule (how often jCustomer is polled, every 5 minutes by default), then *Run now*: push the latest changes, or push one profile by email (Enter or *Push now*), with the result shown next to the button.
   - **History**: see below.
 

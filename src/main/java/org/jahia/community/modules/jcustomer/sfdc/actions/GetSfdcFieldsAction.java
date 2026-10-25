@@ -60,9 +60,9 @@ public class GetSfdcFieldsAction extends AbstractSfdcAdminAction {
         return ActionResult.OK;
     }
 
-    private JSONArray toJsonArray(List<Map<String, String>> fields) {
+    private JSONArray toJsonArray(List<Map<String, Object>> fields) {
         JSONArray arr = new JSONArray();
-        for (Map<String, String> f : fields) {
+        for (Map<String, Object> f : fields) {
             JSONObject obj = new JSONObject();
             f.forEach(obj::put);
             arr.put(obj);

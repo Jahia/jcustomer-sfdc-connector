@@ -67,6 +67,19 @@ class SfdcOutboundSyncServiceTest {
     }
 
     @Test
+    void emptyListUsesTheDefaultValue() {
+        Map<String, Object> props = new HashMap<>();
+        props.put("industries", List.of());
+        props.put("products", java.util.Arrays.asList(null, " "));
+        var f = SfdcOutboundSyncService.buildFields(List.of(
+                row("industries", "Industries__c", "Industrial;Automotive"),
+                row("products", "Products__c", "Connectors")), props);
+        assertEquals("Industrial;Automotive", f.values.get("Industries__c"), "a multi-select default is sent as typed");
+        assertEquals("Connectors", f.values.get("Products__c"), "a list of blank entries counts as empty");
+        assertEquals(0, f.fromProfile);
+    }
+
+    @Test
     void listsAreJoinedForMultiSelectPicklists() {
         var f = SfdcOutboundSyncService.buildFields(List.of(row("industries", "Industries__c", null)),
                 Map.of("industries", List.of("a", "b")));
@@ -106,9 +119,9 @@ class SfdcOutboundSyncServiceTest {
             calls.add("converted by email?");
             return convertedByEmail ? contactId : null;
         }
-        @Override public List<Map<String, String>> describeObject(String sobjectName) {
+        @Override public List<Map<String, Object>> describeObject(String sobjectName) {
             calls.add("describe " + sobjectName);
-            List<Map<String, String>> fields = new ArrayList<>();
+            List<Map<String, Object>> fields = new ArrayList<>();
             for (String name : new String[]{"FirstName", "LastName", "Email", "Title"}) fields.add(Map.of("name", name));
             return fields;
         }

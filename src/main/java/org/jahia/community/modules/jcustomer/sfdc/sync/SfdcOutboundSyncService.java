@@ -536,7 +536,7 @@ public class SfdcOutboundSyncService {
         CachedFields c = contactFields;
         if (c == null || System.currentTimeMillis() - c.loadedAt > FIELD_CACHE_MS) {
             Set<String> names = new HashSet<>();
-            for (Map<String, String> f : apiClient.describeObject("Contact")) names.add(f.get("name"));
+            for (Map<String, Object> f : apiClient.describeObject("Contact")) names.add(String.valueOf(f.get("name")));
             c = new CachedFields(names);
             contactFields = c;
         }
