@@ -4,6 +4,11 @@ All notable changes to the jCustomer to Salesforce Connector are documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.6] - 2026-10-25
+
+### Fixed
+- The admin screen's cards take the full width of the window, with the same margin on both sides; they stopped at 1200 pixels and left the right side of wide windows empty.
+
 ## [2.6.5] - 2026-10-25
 
 ### Added
